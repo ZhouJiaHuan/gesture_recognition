@@ -17,7 +17,7 @@ This repository realize the simple gestures recognition based on skeletons infor
 - torch2trt: https://github.com/NVIDIA-AI-IOT/torch2trt
 - trt-pose: https://github.com/NVIDIA-AI-IOT/trt_pose
 
-The `TensorRT` and `torch2trt` are used for converting and loading trt-pose model.
+The `TensorRT` and `torch2trt` are used for converting and loading `trt-pose` model.
 
 # Dataset
 
