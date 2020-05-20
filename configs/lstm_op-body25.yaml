@@ -1,0 +1,83 @@
+# model config
+model:
+    type: 'LSTM'
+    input_size: 12
+    cls_num: 4
+    hidden_size: 256
+    num_layers: 2
+    dropout: 0.5
+    fc_size: 512
+    loss_func: 'CELoss'
+
+# dataset config
+dataset:
+    train:
+        type: 'OpBody25Dataset'
+        data_folder: '/home/zhoujh/Project/gesture_recognition/data/op_body25/train_aug'
+        cls_names:
+            - 'wave'
+            - 'come'
+            - 'hello'
+            - 'others'
+        body_names:
+            - 'Neck'
+            - 'RShoulder'
+            - 'RElbow'
+            - 'RWrist'
+        transforms:
+            - type: 'BodyRandomToZero'
+              p: 0.05
+            - type: 'BodyZeroInterpolation'
+            - type: 'BodyInterpolation'
+              min_n: 35
+            - type: 'BodyRandomCropVariable'
+              ratio_s: 0.1
+              ratio_e: 0.1
+            - type: 'BodyGaussianNoise'
+              scale: 0.005
+            - type: 'BodyExpSmooth'
+              alpha: 0.8
+            - type: 'BodyResize'
+              length: 30
+            - type: 'BodyCoordTransform'
+            - type: 'BodyNormalize'
+    test:
+        type: 'OpBody25Dataset'
+        data_folder: '/home/zhoujh/Project/gesture_recognition/data/op_body25/test_aug'
+        cls_names:
+           - 'wave'
+           - 'come'
+           - 'hello'
+           - 'others'
+        body_names:
+           - 'Neck'
+           - 'RShoulder'
+           - 'RElbow'
+           - 'RWrist'
+        transforms:
+            - type: 'BodyZeroInterpolation'
+            - type: 'BodyExpSmooth'
+              alpha: 0.8
+            - type: 'BodyResize'
+              length: 30
+            - type: 'BodyCoordTransform'
+            - type: 'BodyNormalize'
+    train_loader:
+        batch_size: 512
+        num_workers: 16
+        shuffle: true
+    test_loader:
+        batch_size: 512
+        num_workers: 16
+        shuffle: false
+
+lr_config:
+    epochs: 2400
+    lr: 0.0001
+    step:
+        - 1200
+        - 2000
+    weight_decay: 1.0e-8
+
+# work dir
+work_dir: '/home/zhoujh/Project/gesture_workdir/op_body25/lstm_baseline'

@@ -1,0 +1,11 @@
+*.so
+*.jpg
+*.bag
+*.pth
+*.pyc
+*.sh
+*.out
+checkpoints/
+data/
+.vscode/
+
