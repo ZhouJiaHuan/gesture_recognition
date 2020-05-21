@@ -158,13 +158,14 @@ class BodyExtractor(object):
                     cv_output = cv_output[:, :, ::-1]
                     cv2.imshow("keypoints output", cv_output)
                     cv2.waitKey(1)
-                if len(keypoints.shape) < 1:
+                if keypoints.shape[0] < 1:
                     continue
 
                 keypoint = self.get_best_keypoint(keypoints)
                 point = self.keypoint_to_point(keypoint, depth_frame)
                 points_array.append(point.flatten())
         except RuntimeError:
+            cv2.destroyAllWindows()
             self.rs_pipe.stop()
 
         points_array = np.array(points_array, dtype='float')
