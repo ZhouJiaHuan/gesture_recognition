@@ -25,27 +25,27 @@ def post_process_wave(points_array, mode='openpose'):
     '''
     print("in post procss: wave")
     if mode == "openpose":
+        points_array = remove_outlier(points_array, [7, 9, 10, 11])
         rwrist_x = points_array[:, 9]
         rwrist_y = points_array[:, 10]
         rwrist_z = points_array[:, 11]
         relbow_y = points_array[:, 7]
-        rshoulder_y = points_array[:, 4]
     elif mode == "trtpose":
+        points_array = remove_outlier(points_array, [4, 6, 7, 8])
         rwrist_x = points_array[:, 6]
         rwrist_y = points_array[:, 7]
         rwrist_z = points_array[:, 8]
         relbow_y = points_array[:, 4]
-        rshoulder_y = points_array[:, 1]
     else:
         raise
     rwrist_x = rwrist_x[rwrist_x != 0]
     rwrist_y = rwrist_y[rwrist_y != 0]
     rwrist_z = rwrist_z[rwrist_z != 0]
     relbow_y = relbow_y[relbow_y != 0]
-    rshoulder_y = rshoulder_y[rshoulder_y != 0]
 
     if rwrist_x.shape[0] * rwrist_y.shape[0] * rwrist_z.shape[0] * \
-       relbow_y.shape[0] * rshoulder_y.shape[0] == 0:
+       relbow_y.shape[0] == 0:
+        print("wave: shape 0")
         return False
 
     if np.mean(rwrist_y) >= np.mean(relbow_y):
@@ -57,6 +57,7 @@ def post_process_wave(points_array, mode='openpose'):
         return False
 
     if np.max(rwrist_z) - np.min(rwrist_z) > 0.2:
+        print(rwrist_z)
         print("wave: too large rwrist_z")
         return False
 
@@ -74,12 +75,14 @@ def post_process_come(points_array, mode='openpose'):
     '''
     print("in post procss: come")
     if mode == "openpose":
+        points_array = remove_outlier(points_array, [4, 7, 9, 10, 11])
         rwrist_x = points_array[:, 9]
         rwrist_y = points_array[:, 10]
         rwrist_z = points_array[:, 11]
         relbow_y = points_array[:, 7]
         rshoulder_y = points_array[:, 4]
     elif mode == "trtpose":
+        points_array = remove_outlier(points_array, [1, 4, 6, 7, 8])
         rwrist_x = points_array[:, 6]
         rwrist_y = points_array[:, 7]
         rwrist_z = points_array[:, 8]
@@ -124,9 +127,11 @@ def post_process_hello(points_array, mode='openpose'):
     '''
     print("in post procss: hello")
     if mode == "openpose":
+        points_array = remove_outlier(points_array, [1, 10])
         rwrist_y = points_array[:, 10]
         neck_y = points_array[:, 1]
     elif mode == "trtpose":
+        points_array = remove_outlier(points_array, [7, 10])
         rwrist_y = points_array[:, 7]
         neck_y = points_array[:, 10]
     else:
@@ -202,3 +207,23 @@ def get_shoulder_hip_dis(points_array, mode='openpose'):
     dis += np.sqrt(np.sum((l_shoulder[:2]-midhip[:2])**2))
     dis += np.sqrt(np.sum((r_shoulder[:2]-midhip[:2])**2))
     return dis
+
+
+def remove_outlier(points_array, idx_list=None):
+    T, D = points_array.shape
+    if idx_list is None:
+        idx_list = range(D)
+    temp_array = points_array[:, idx_list]
+    temp_mean = np.mean(temp_array, axis=0)
+    temp_std = np.std(temp_array, axis=0)
+    mask1 = temp_array > (temp_mean - 1*temp_std)
+    mask2 = temp_array < (temp_mean + 1*temp_std)
+    mask = np.prod(mask1 * mask2, axis=1) > 0
+    result_array = points_array[mask]
+    return result_array
+
+
+if __name__ == "__main__":
+    array = np.arange(24).reshape([8, 3])
+    result = remove_outlier(array, [1])
+    print(result)

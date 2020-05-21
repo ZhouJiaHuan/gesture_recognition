@@ -13,7 +13,7 @@ import pyrealsense2 as rs
 from mmcv import Config
 from dataset import build_dataset, OpenposeExtractor, TrtposeExtractor
 from model import build_model, LSTM
-from .point_seq import is_static, get_angle
+from .point_seq import is_static, get_angle, remove_outlier
 from .point_seq import post_process_wave, post_process_come, post_process_hello
 
 
@@ -78,7 +78,7 @@ class Inference(object):
 
         # configure feature extractor for tracking and re-ID
         if feature == 'surf':
-            self.feature = cv2.xfeatures2d.SURF_create(400, extended=True, upright=1)
+            self.feature = cv2.xfeatures2d.SURF_create(400, extended=False, upright=1)
         elif feature == 'akaze':
             self.feature = cv2.AKAZE_create()
         else:
