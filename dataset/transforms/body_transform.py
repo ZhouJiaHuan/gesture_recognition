@@ -85,33 +85,23 @@ class BodyZeroInterpolation(object):
     '''interpolate the location where the points value is zero.
     '''
 
-    def __init__(self, index_list=None):
+    def __init__(self):
         self.d = 3
-        self.index_list = index_list
 
     def __call__(self, points_array):
         T, D = points_array.shape
         assert D > 0, "dimensions should greater than 0!"
-        if self.index_list is None:
-            index_array = np.arange(D // self.d)
-        else:
-            index_array = np.uint8(self.index_list)
-        assert max(index_array) < D
-
         result_array = points_array.copy()
 
         x_eval = np.arange(T)
-        # y for 2-dim and z for 3-dim
-        index = index_array * self.d + self.d - 1
-        temp_array = np.min(points_array[:, index], axis=1)
-        keep_t = np.where(temp_array > 1e-2)
-        keep_x = x_eval[keep_t]
-        if len(keep_x) == T or len(keep_x) < T // 3:
-            return result_array
-
-        keep_array = points_array[keep_t, ].squeeze(0)
         for i in range(D):
-            result_array[:, i] = np.interp(x_eval, keep_x, keep_array[:, i])
+            temp_array = result_array[:, i]
+            mask = temp_array != 0
+            keep_x = x_eval[mask]
+            keep_array = temp_array[mask]
+            if len(keep_x) == T or len(keep_x) < T // 3:
+                continue
+            result_array[:, i] = np.interp(x_eval, keep_x, keep_array)
 
         return result_array
 
@@ -141,6 +131,32 @@ class BodyRandomToZero(object):
             temp = result_array[:, i*self.d:(i+1)*self.d] * temp_p
             result_array[:, i*self.d:(i+1)*self.d] = temp
 
+        return result_array
+
+
+@PIPELINES.register_module
+class BodyOutlierToZero(object):
+    '''detect and set the outlier points to zero.
+    '''
+    def __init__(self):
+        self.d = 3
+
+    def __call__(self, points_array):
+        T, D = points_array.shape
+        assert D > 0, "dimensions should greater than 0!"
+
+        result_array = points_array.copy()
+        for i in range(D):
+            temp_array = result_array[:, i]
+            temp_array = temp_array[temp_array != 0]
+            if temp_array.shape[0] == 0:
+                continue
+            temp_mean = np.mean(temp_array)
+            temp_std = np.std(temp_array)
+            mask1 = result_array[:, i] > temp_mean + 1.5 * temp_std
+            mask2 = result_array[:, i] < temp_mean - 1.5 * temp_std
+            mask = mask1 + mask2
+            result_array[mask, i] = 0
         return result_array
 
 

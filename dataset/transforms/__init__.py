@@ -6,4 +6,4 @@ __all__ = ['BodyNormalize', 'BodyCoordTransform', 'BodyInterpolation',
            'BodyZeroInterpolation', 'BodyRandomCropFixLen',
            'BodyRandomCropVariable', 'BodyRandomSample',
            'BodyRandomToZero', 'BodyGaussianNoise', 'BodyExpSmooth',
-           'BodyResize', 'Compose']
+           'BodyResize', 'BodyOutlierToZero', 'Compose']
