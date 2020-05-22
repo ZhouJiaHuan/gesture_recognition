@@ -138,8 +138,9 @@ class BodyRandomToZero(object):
 class BodyOutlierToZero(object):
     '''detect and set the outlier points to zero.
     '''
-    def __init__(self):
+    def __init__(self, alpha=1.5):
         self.d = 3
+        self.alpha = alpha
 
     def __call__(self, points_array):
         T, D = points_array.shape
@@ -153,8 +154,8 @@ class BodyOutlierToZero(object):
                 continue
             temp_mean = np.mean(temp_array)
             temp_std = np.std(temp_array)
-            mask1 = result_array[:, i] > temp_mean + 1.5 * temp_std
-            mask2 = result_array[:, i] < temp_mean - 1.5 * temp_std
+            mask1 = result_array[:, i] > temp_mean + self.alpha * temp_std
+            mask2 = result_array[:, i] < temp_mean - self.alpha * temp_std
             mask = mask1 + mask2
             result_array[mask, i] = 0
         return result_array

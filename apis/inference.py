@@ -8,12 +8,11 @@ import cv2
 from collections import Counter
 import torch
 from torch.nn.functional import softmax
-import pyrealsense2 as rs
 
 from mmcv import Config
 from dataset import build_dataset, OpenposeExtractor, TrtposeExtractor
-from model import build_model, LSTM
-from .point_seq import is_static, get_angle, remove_outlier
+from model import build_model
+from .point_seq import is_static, get_angle
 from .point_seq import post_process_wave, post_process_come, post_process_hello
 
 
@@ -147,7 +146,7 @@ class Inference(object):
 
         idx = np.argmax(predict)
         score = float(predict[idx])
-        if score > 0.8:
+        if score > 0.7:
             predict_label = self.cls_names[idx]
             flag = self._post_process(point_array, predict_label)
             predict_label = predict_label if flag is True else "others"
@@ -167,15 +166,6 @@ class Inference(object):
         self.predict[person_id] = predict_s
         self.smooth_count += 1
         return predict_s
-
-    def _vote(self, predict_label, num=5):
-        self.vote_proposals.append(predict_label)
-        if len(self.vote_proposals) < num:
-            return predict_label
-        else:
-            self.vote_proposals.append(predict_label)
-            self.vote_proposals = self.vote_proposals[-num:]
-            return Counter(self.vote_proposals).most_common(1)[0][0]
 
     def _draw_person_ids(self, cv_output, keypoints, person_ids, predict_result):
         '''
@@ -221,15 +211,15 @@ class Inference(object):
             return False
         return True
 
-    def _get_person_feature(self, color_image, keypoint):
+    def _get_body_feature(self, color_image, src_keypoint):
         feature = np.zeros([0, self.feature.descriptorSize()])
         if self.mode == "openpose":
-            keypoint = keypoint[[2, 5, 8], :]
+            keypoint = src_keypoint[[2, 5, 8], :]
             keypoint = keypoint[keypoint[:, -1] > 0, :2]
             if keypoint.shape[0] < 3:
                 return feature
         else:
-            keypoint = keypoint[[6, 5, 12, 11], :]
+            keypoint = src_keypoint[[6, 5, 12, 11], :]
             keypoint = keypoint[keypoint[:, -1] > 0, ]
             if keypoint.shape[0] < 4:
                 return feature
@@ -253,12 +243,51 @@ class Inference(object):
             img_affine = cv2.warpAffine(img, M, (cols, rows))
             t_s = time.time()
             img_affine = cv2.resize(img_affine, (80, 120))
-            _, feature = self._feature_extractor(img_affine)
-            # cv2.imshow("src feature area", img[:,:,::-1])
-            # cv2.imshow("dst feature area", img_affine[:,:,::-1])
+            _, temp_feature = self._feature_extractor(img_affine)
+            feature = temp_feature if temp_feature is not None else feature
+            # cv2.imshow("src body area", img[:,:,::-1])
+            # cv2.imshow("dst body area", img_affine[:,:,::-1])
             # cv2.waitKey(1)
             feature_time = time.time() - t_s
-            print('feature time = {:.3f}'.format(feature_time*1000))  # about 0.6 ms
+            print('body feature time = {:.3f}'.format(feature_time*1000))  # about 0.6 ms
+        return feature
+
+    def _get_face_feature(self, color_image, src_keypoint):
+        feature = np.zeros([0, self.feature.descriptorSize()])
+        # Nose, REye, LEye, REar, LEar
+        if self.mode == "openpose":
+            keypoint = src_keypoint[[0, 15, 16, 17, 18], :2]
+        elif self.mode == "trtpose":
+            keypoint = src_keypoint[[0, 2, 1, 4, 3], :]
+        else:
+            raise
+
+        if keypoint[0, 0] * keypoint[1, 0] * keypoint[2, 0] == 0:
+            return feature
+
+        valid_keypoint = keypoint[keypoint[:, 0] > 0, :]
+        size = int(np.max(np.abs(valid_keypoint - valid_keypoint[0, ])) * 2)
+
+        height, width = color_image.shape[:2]
+        x1 = max(0, int(keypoint[0, 0] - size / 2))
+        y1 = max(0, int(keypoint[0, 1] - size / 2))
+        x2 = min(width, int(keypoint[0, 0] + size / 2))
+        y2 = min(height, int(keypoint[0, 1] + size / 2))
+        img = color_image[y1:y2, x1:x2]
+
+        if img.shape[0] * img.shape[1] > 0:
+            src = np.float32(keypoint[:3, ] - [x1, y1])
+            dst = np.float32([[48.025, 71.736], [30.294, 51.696], [65.531, 51.501]])
+            M = cv2.getAffineTransform(src, dst)
+            img_affine = cv2.warpAffine(img, M, (112, 112))
+            t_s = time.time()
+            _, temp_feature = self._feature_extractor(img_affine)
+            feature = temp_feature if temp_feature is not None else feature
+            cv2.imshow("src face area", img[:,:,::-1])
+            cv2.imshow("dst face area", img_affine[:,:,::-1])
+            cv2.waitKey(1)
+            feature_time = time.time() - t_s
+            print('face feature time = {:.3f}'.format(feature_time*1000))  # about 0.6 ms
         return feature
 
     def _feature_extractor(self, img):
@@ -280,16 +309,12 @@ class Inference(object):
         return similarity
 
     def _person_sim(self, person_1, person_2):
-        dis1, person_feature1 = person_1
-        dis2, person_feature2 = person_2
-        dis = np.abs(dis1 - dis2)
-        t_s = time.time()
-        feature_sim = self._feature_similarity(person_feature1, person_feature2)
-        sim_time = time.time() - t_s
-        # print('feature_sim time = {}'.format(sim_time*1000))  # about 0.1 ms
-        sim = feature_sim - 0.0 * dis
-        sim = max(sim, 0)
-        print("feature: {:.3f}, dis: {:.3f}, sim: {:.3f}".format(feature_sim, dis, sim))
+        face_feature1, body_feature1 = person_1
+        face_feature2, body_feature2 = person_2
+        face_sim = self._feature_similarity(face_feature1, face_feature2)
+        body_sim = self._feature_similarity(body_feature1, body_feature2)
+        sim = 0.5 * face_sim + 0.5 * body_sim
+        print("face sim: {:.3f}, body sim: {:.3f}, total sim: {:.3f}".format(face_sim, body_sim, sim))
 
         return sim
 
@@ -308,24 +333,15 @@ class Inference(object):
                 best_person_id = person_id
         return best_person_id, best_sim
 
-    def _is_in_memory(self, sim, sim_thr=0.15):
+    def _is_in_memory(self, sim, sim_thr=0.2):
         return sim > sim_thr
 
     def _update_memory(self, color_image, keypoints_list, points_list):
         result_ids = []
         for keypoint, point in zip(keypoints_list, points_list):
-            dis = 0  # do not consider distance for now
-            person_feature = self._get_person_feature(color_image, keypoint)
-            input_info = [dis, person_feature]
-            if person_feature is None:
-                print("None state")
-                result_ids.append(['0', 0])
-                continue
-            if person_feature.shape[0] == 0:
-                print("shape 0 state")
-                result_ids.append(['0', 0])
-                continue
-
+            face_feature = self._get_face_feature(color_image, keypoint)
+            body_feature = self._get_body_feature(color_image, keypoint)
+            input_info = [face_feature, body_feature]
             best_person_id, best_sim = self._find_best_match(input_info)
 
             if best_person_id in result_ids:
@@ -337,6 +353,7 @@ class Inference(object):
                 else:
                     result_ids.append(['0', 0])
             else:
+
                 if self._update_memory_cache(input_info):
                     self.memory['max_id'] += 1
                     self.memory_count += 1
@@ -354,18 +371,18 @@ class Inference(object):
             self.memory_cache_count = 0
             self.memory_cache = []
 
-        if len(self.memory_cache) == 0:
-            dis, surf = input_info
-            self.memory_cache.append([dis, surf, 1])
-            return False
-
         for idx, temp_info in enumerate(self.memory_cache):
             temp_sim = self._person_sim(temp_info[:-1], input_info)
             if temp_sim > 0.5:
                 self.memory_cache[idx][-1] += 1
-            if self.memory_cache[idx][-1] > pop_num:
-                self.memory_cache.pop(idx)
-                return True
+                count = self.memory_cache[idx][-1]
+                if count >= pop_num:
+                    self.memory_cache.pop(idx)
+                    return True
+
+        face_feature, body_feature = input_info
+        if face_feature.shape[0] > 0 and body_feature.shape[0] > 0:
+            self.memory_cache.append([face_feature, body_feature, 1])
         return False
 
     def _update_output_cache(self, best_person_id, clean_num=20, pop_num=2):

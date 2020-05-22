@@ -216,8 +216,8 @@ def remove_outlier(points_array, idx_list=None):
     temp_array = points_array[:, idx_list]
     temp_mean = np.mean(temp_array, axis=0)
     temp_std = np.std(temp_array, axis=0)
-    mask1 = temp_array > (temp_mean - 1*temp_std)
-    mask2 = temp_array < (temp_mean + 1*temp_std)
+    mask1 = temp_array > (temp_mean - 1.5*temp_std)
+    mask2 = temp_array < (temp_mean + 1.5*temp_std)
     mask = np.prod(mask1 * mask2, axis=1) > 0
     result_array = points_array[mask]
     return result_array
