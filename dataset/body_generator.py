@@ -46,7 +46,7 @@ class BodyGenerator(object):
         '''
         self.cls_names = cls_names
 
-    def generate(self, src_dir, out_dir, seq_len=30, gap=10, ignore=5):
+    def generate(self, src_dir, out_dir, ext, seq_len=30, gap=10, ignore=5):
         '''
 
         src_dir:
@@ -106,7 +106,7 @@ class BodyGenerator(object):
                 crop_num = int(np.floor((T-seq_len)/gap)+1)
                 for i in range(crop_num):
                     temp_keypoints = keypoints_array[i*gap:i*gap+seq_len, :]
-                    save_txt = os.path.join(dst_dir, cls_name + '_' + str(idx_s+i) + '.txt')
+                    save_txt = os.path.join(dst_dir, cls_name + '_' + str(idx_s+i) + ext + '.txt')
                     try:
                         np.savetxt(save_txt, temp_keypoints, fmt='%.5f')
                     except Exception as e:
