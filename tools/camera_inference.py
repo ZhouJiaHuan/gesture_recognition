@@ -52,7 +52,7 @@ def main():
                              op_model=args.op_model,
                              trt_model=args.trt_model,
                              pose_json_path=args.trt_json,
-                             feature=extractor
+                             feature=extractor,
                              )
     camera_infer.infer_pipeline(show=args.show)
 

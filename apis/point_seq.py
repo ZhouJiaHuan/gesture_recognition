@@ -56,8 +56,7 @@ def post_process_wave(points_array, mode='openpose'):
         print("wave: too small rwrist_x")
         return False
 
-    if np.max(rwrist_z) - np.min(rwrist_z) > 0.2:
-        print(rwrist_z)
+    if np.max(rwrist_z) - np.min(rwrist_z) > 0.25:
         print("wave: too large rwrist_z")
         return False
 
@@ -162,7 +161,32 @@ def post_process_hello(points_array, mode='openpose'):
     return True
 
 
-def get_angle(points_array, mode='openpose'):
+def get_face_angle(points_array, mode='openpose'):
+    angle = np.zeros([3, ])
+    if mode == 'openpose':
+        nose = points_array[0, :3]
+        r_eye = points_array[15, :3]
+        l_eye = points_array[16, :3]
+    elif mode == 'trtpose':
+        nose = points_array[0, :]
+        r_eye = points_array[2, :]
+        l_eye = points_array[1, :]
+    else:
+        raise
+
+    if nose[-1] * r_eye[-1] * l_eye[-1] == 0:
+        print("loss keypoints info for compute face angle")
+        return angle
+    else:
+        v1 = r_eye[:3] - nose[:3]
+        v2 = l_eye[:3] - nose[:3]
+        norm_v = np.cross(v1, v2)
+        norm_d = np.sqrt(np.sum(norm_v ** 2)) + 1e-6
+        angle = np.arccos(norm_v / norm_d) * 180 / np.pi
+        return angle
+
+
+def get_body_angle(points_array, mode='openpose'):
     angle = np.zeros([3, ])
     if mode == 'openpose':
         r_shoulder = points_array[2, :3]
@@ -176,11 +200,11 @@ def get_angle(points_array, mode='openpose'):
         raise
     dis = np.sqrt(np.sum((l_shoulder-r_shoulder)**2))
 
-    if dis < 0.15:
+    if dis < 0.1:
         print("small dis")
         return angle
     elif r_shoulder[-1] * l_shoulder[-1] * midhip[-1] == 0:
-        print("loss keypoints info for compute angle")
+        print("loss keypoints info for compute body angle")
         return angle
     else:
         v1 = r_shoulder[:3] - midhip[:3]
