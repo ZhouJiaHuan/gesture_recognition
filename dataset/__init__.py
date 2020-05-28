@@ -17,6 +17,6 @@ __all__ = ['BodyExtractor',
            'OpBody25Dataset',
            'TrtBody18Dataset',
            'DATASET',
-           'PIPELINES'
+           'PIPELINES',
            'build_dataset'
-          ]
+           ]
