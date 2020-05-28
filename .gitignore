@@ -6,8 +6,10 @@
 *.sh
 *.out
 *.dat
+*.xml
 checkpoints/
 data/
 test_code/
+discarded/
 .vscode/
 
