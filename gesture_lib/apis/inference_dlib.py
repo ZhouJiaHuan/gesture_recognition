@@ -17,8 +17,8 @@ class InferenceDlib(Inference):
     def __init__(self, *args, **kwargs):
         super(InferenceDlib, self).__init__(*args, **kwargs)
 
-        pre_path = "./apis/shape_predictor_5_face_landmarks.dat"
-        rec_path = "./apis/dlib_face_recognition_resnet_model_v1.dat"
+        pre_path = "gesture_lib/apis/shape_predictor_5_face_landmarks.dat"
+        rec_path = "gesture_lib/apis/dlib_face_recognition_resnet_model_v1.dat"
 
         self.face_pre = dlib.shape_predictor(pre_path)
         self.face_rec = dlib.face_recognition_model_v1(rec_path)

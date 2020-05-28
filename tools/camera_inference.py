@@ -1,8 +1,7 @@
+import argparse
 import sys
 sys.path.append(".")
-
-import argparse
-from apis import Inference
+from gesture_lib.apis import InferenceSurf, InferenceDlib
 
 
 def parse_args():
@@ -17,10 +16,10 @@ def parse_args():
                         help="path to trt model, ignored when using openpose")
     parser.add_argument('--trt_json',
                         help="path to trt pose json file, ignored when using openpose")
-    parser.add_argument('--extractor', default='surf',
-                        help="extractor for person feature, 'surf' or 'akaze'")
     parser.add_argument('--seq_len', type=int, default=30,
                         help="sequence length for recognition, default 30")
+    parser.add_argument('--dlib', action='store_true',
+                        help="whether to use dlib for face feature extraction or not")
     parser.add_argument('--show', action='store_true',
                         help="show the recognition result or not")
     args = parser.parse_args()
@@ -32,7 +31,6 @@ def main():
     args = parse_args()
     cfg_path = args.config
     ckp = args.checkpoint
-    extractor = args.extractor
     if cfg_path is None or ckp is None:
         print("configure path and checkpoint must be specified!")
         raise
@@ -42,18 +40,23 @@ def main():
     if ckp.split('.')[-1] != 'pth':
         print("invalid .pth checkpoint file!")
         raise
-    if extractor not in ['surf', 'akaze']:
-        print("invalid extractor!, got {}".format(extractor))
-        raise
 
-    camera_infer = Inference(cfg_path=cfg_path,
-                             checkpoints=ckp,
-                             seq_len=args.seq_len,
-                             op_model=args.op_model,
-                             trt_model=args.trt_model,
-                             pose_json_path=args.trt_json,
-                             feature=extractor,
-                             )
+    if args.dlib:
+        camera_infer = InferenceDlib(cfg_path=cfg_path,
+                                     checkpoints=ckp,
+                                     seq_len=args.seq_len,
+                                     op_model=args.op_model,
+                                     trt_model=args.trt_model,
+                                     pose_json_path=args.trt_json,
+                                     )
+    else:
+        camera_infer = InferenceSurf(cfg_path=cfg_path,
+                                     checkpoints=ckp,
+                                     seq_len=args.seq_len,
+                                     op_model=args.op_model,
+                                     trt_model=args.trt_model,
+                                     pose_json_path=args.trt_json,
+                                     )
     camera_infer.infer_pipeline(show=args.show)
 
 

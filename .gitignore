@@ -5,7 +5,9 @@
 *.pyc
 *.sh
 *.out
+*.dat
 checkpoints/
 data/
+test_code/
 .vscode/
 

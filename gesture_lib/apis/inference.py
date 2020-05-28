@@ -11,8 +11,8 @@ import torch
 from torch.nn.functional import softmax
 
 from mmcv import Config
-from dataset import build_dataset, OpenposeExtractor, TrtposeExtractor
-from model import build_model
+from gesture_lib.dataset import build_dataset, OpenposeExtractor, TrtposeExtractor
+from gesture_lib.model import build_model
 from .point_seq import is_static, get_body_angle, get_face_angle
 from .point_seq import post_process_wave, post_process_come, post_process_hello
 

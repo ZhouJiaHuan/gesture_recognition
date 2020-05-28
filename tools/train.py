@@ -12,13 +12,11 @@ from tensorboardX import SummaryWriter
 from mmcv import Config
 import time
 import argparse
-
 import sys
 sys.path.append(".")
-
-from utils import make_dirs
-from model import build_model
-from dataset import build_dataset
+from gesture_lib.utils import make_dirs
+from gesture_lib.model import build_model
+from gesture_lib.dataset import build_dataset
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 

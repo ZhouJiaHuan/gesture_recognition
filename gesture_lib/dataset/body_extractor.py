@@ -7,9 +7,7 @@ import pyrealsense2 as rs
 from tqdm import tqdm
 from abc import abstractmethod
 
-import sys
-sys.path.append('.')
-from utils import get_file_path
+from gesture_lib.utils import get_file_path
 
 
 class BodyExtractor(object):

@@ -2,9 +2,8 @@ import numpy as np
 import os
 import glob
 from tqdm import tqdm
-import sys
-sys.path.append('.')
-from utils import make_dirs
+
+from gesture_lib.utils import make_dirs
 
 class BodyGenerator(object):
     '''
