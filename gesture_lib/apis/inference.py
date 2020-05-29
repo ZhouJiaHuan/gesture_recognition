@@ -13,7 +13,7 @@ from torch.nn.functional import softmax
 from mmcv import Config
 from gesture_lib.dataset import build_dataset, OpenposeExtractor, TrtposeExtractor
 from gesture_lib.model import build_model
-from .point_seq import is_static, get_body_angle, get_face_angle
+from .point_seq import is_static, get_body_angle, get_face_angle, get_location
 from .point_seq import post_process_wave, post_process_come, post_process_hello
 
 
@@ -80,10 +80,11 @@ class Inference(object):
         self.smooth_count = 0
 
         # init memory and cache
+        self.sim_thr1 = 0.2  # for memory
+        self.sim_thr2 = 0.8  # for memory cache
         self.max_person_one_frame = 5
-        self.proposal_person = {}
         self.memory = {'max_id': 0}
-        self.memory_count = 0
+        self.memory_capacity = 10
         self.memory_cache = []
         self.memory_cache_count = 0
 
@@ -219,7 +220,7 @@ class Inference(object):
         if angle[0] < 60 or angle[0] > 120:
             print("invalid face x angle", angle[0])
             return False
-        if angle[1] < 50 or angle[1] > 80:
+        if angle[1] < 40 or angle[1] > 80:
             print("invalid face y angle", angle[1])
             return False
         if angle[2] < 0 or angle[2] > 60:
@@ -228,38 +229,101 @@ class Inference(object):
         return True
 
     @abstractmethod
-    def _person_sim(self, person_1, person_2):
+    def _extract_feature(self, color_image, keypoint):
+        '''extract feature from color image with specified keypoint info.
+        '''
+        raise NotImplementedError
+
+    @abstractmethod
+    def _person_sim(self, feature1, feature2):
+        ''' compute the feature similarity
+
+        the type of feature1 and feature2 is decided by `_extract_feature`
+        '''
         raise NotImplementedError
 
     def _find_best_match(self, input_info):
         best_person_id = '0'
         best_sim = 0
+        best_pos = np.zeros(3)
 
         if self.memory['max_id'] == 0:
-            return best_person_id, best_sim
+            return best_person_id, best_sim, best_pos
 
         for i in range(self.memory['max_id']):
             person_id = 'person_'+str(i+1)
             memory_info = self.memory[person_id]
-            temp_sim = self._person_sim(memory_info, input_info)
+            memory_pos, input_pos = memory_info[0], input_info[0]
+            # temp_dis = np.sqrt(np.sum((memory_pos[:2]-input_pos[:2])**2))
+            # the distance between current frame and previous frame
+            # of the same person should be very small, so if the distance
+            # is very large, it is unnecessary to compare the features
+            # print("temp_dis = ", temp_dis )
+            # if memory_info[-1] is True and temp_dis > 0.5:
+            # continue
+            temp_sim = self._person_sim(memory_info[1], input_info[1])
             if temp_sim > best_sim:
                 best_sim = temp_sim
                 best_person_id = person_id
-        return best_person_id, best_sim
+                best_pos = input_pos
+        return best_person_id, best_sim, best_pos
 
-    @abstractmethod
     def _update_memory(self, color_image, keypoints_list, points_list):
-        raise NotImplementedError
+        '''update memory info with current keypoints and points info
 
-    def _update_memory_cache(self, input_info, clean_num=20, pop_num=4, sim_thr=0.9):
+        Args:
+            color_image: [ndarray], current color frame
+            keypoints_list: [array list], keypoints info extracted
+            points_list: [array list], 3-D points info computed from keypoints
+                         and depth info.
+
+        Return:
+            result_ids: [list of list], [[id1, sim1], [id1, sim1], ...], when
+                        the person is not in the memory, the id is set to '0'.
+
+        '''
+        result_ids = []
+        for keypoint, point in zip(keypoints_list, points_list):
+            point_center = get_location(point)
+            keypoint_feature = self._extract_feature(color_image, keypoint)
+
+            input_info = [point_center, keypoint_feature]  # [pos, feature]
+            best_person_id, best_sim, best_pos = self._find_best_match(input_info)
+
+            if best_person_id in result_ids:
+                continue
+
+            if best_sim > self.sim_thr1:
+                self.memory[best_person_id][0] = best_pos
+                self.memory[best_person_id][-1] = True
+                if self._update_output_cache(best_person_id):
+
+                    result_ids.append([best_person_id, best_sim])
+                else:
+                    result_ids.append(['0', 0])
+            else:
+                if best_person_id != '0':
+                    self.memory[best_person_id][-1] = False
+                input_info.extend([False])  # flag for update position
+                if self._update_memory_cache(input_info):
+                    self.memory['max_id'] += 1
+                    person_id = 'person_' + str(self.memory['max_id'])
+                    self.memory[person_id] = input_info
+                    result_ids.append([person_id, 1])
+                else:
+                    result_ids.append(['0', 0])
+
+        return result_ids
+
+    def _update_memory_cache(self, input_info, clean_num=20, pop_num=4):
         self.memory_cache_count += 1
         if self.memory_cache_count > clean_num:
             self.memory_cache_count = 0
             self.memory_cache = []
 
         for idx, temp_info in enumerate(self.memory_cache):
-            temp_sim = self._person_sim(temp_info[:-1], input_info)
-            if temp_sim > sim_thr:
+            temp_sim = self._person_sim(temp_info[1], input_info[1])
+            if temp_sim > self.sim_thr2:
                 self.memory_cache[idx][-1] += 1
                 self.memory_cache[idx][:len(input_info)] = input_info
                 count = self.memory_cache[idx][-1]
@@ -342,7 +406,7 @@ class Inference(object):
                 temp_point = self.extractor.keypoint_to_point(keypoints[i, :, :], depth_frame)
                 face_angle = get_face_angle(temp_point, self.mode)
                 body_angle = get_body_angle(temp_point, self.mode)
-                valid_body = self._is_valid_body_angle(body_angle)
+                # valid_body = self._is_valid_body_angle(body_angle)
                 valid_face = self._is_valid_face_angle(face_angle)
                 if valid_face:
                     current_points.append(temp_point)
@@ -351,10 +415,11 @@ class Inference(object):
                     print("body angle: ", body_angle)
                     print("face angle: ", face_angle)
             person_ids = self._update_memory(color_image, keypoints, current_points)
+            print("person_ids = ", person_ids)
             if len(person_ids) > 0:
                 self._update_points(current_points, person_ids)
             # print(person_ids)
-            t_s = time.time()
+            # t_s = time.time()
             predict_result = self._predict()
             # print("gesture time: {:.3f}".format((time.time()-t_s)*1000)) # 3 ms / person
             # print("predict_result = ", predict_result)

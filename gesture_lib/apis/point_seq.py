@@ -161,16 +161,30 @@ def post_process_hello(points_array, mode='openpose'):
     return True
 
 
-def get_face_angle(points_array, mode='openpose'):
+def remove_outlier(points_array, idx_list=None):
+    T, D = points_array.shape
+    if idx_list is None:
+        idx_list = range(D)
+    temp_array = points_array[:, idx_list]
+    temp_mean = np.mean(temp_array, axis=0)
+    temp_std = np.std(temp_array, axis=0)
+    mask1 = temp_array > (temp_mean - 1.5*temp_std)
+    mask2 = temp_array < (temp_mean + 1.5*temp_std)
+    mask = np.prod(mask1 * mask2, axis=1) > 0
+    result_array = points_array[mask]
+    return result_array
+
+
+def get_face_angle(point, mode='openpose'):
     angle = np.zeros([3, ])
     if mode == 'openpose':
-        nose = points_array[0, :3]
-        r_eye = points_array[15, :3]
-        l_eye = points_array[16, :3]
+        nose = point[0, :3]
+        r_eye = point[15, :3]
+        l_eye = point[16, :3]
     elif mode == 'trtpose':
-        nose = points_array[0, :]
-        r_eye = points_array[2, :]
-        l_eye = points_array[1, :]
+        nose = point[0, :]
+        r_eye = point[2, :]
+        l_eye = point[1, :]
     else:
         raise
 
@@ -186,16 +200,16 @@ def get_face_angle(points_array, mode='openpose'):
         return angle
 
 
-def get_body_angle(points_array, mode='openpose'):
+def get_body_angle(point, mode='openpose'):
     angle = np.zeros([3, ])
     if mode == 'openpose':
-        r_shoulder = points_array[2, :3]
-        l_shoulder = points_array[5, :3]
-        midhip = points_array[8, :3]
+        r_shoulder = point[2, :3]
+        l_shoulder = point[5, :3]
+        midhip = point[8, :3]
     elif mode == 'trtpose':
-        r_shoulder = points_array[6, :]
-        l_shoulder = points_array[5, :]
-        midhip = np.mean(points_array[11:13, :], axis=0)
+        r_shoulder = point[6, :]
+        l_shoulder = point[5, :]
+        midhip = np.mean(point[11:13, :], axis=0)
     else:
         raise
     dis = np.sqrt(np.sum((l_shoulder-r_shoulder)**2))
@@ -204,7 +218,7 @@ def get_body_angle(points_array, mode='openpose'):
         print("small dis")
         return angle
     elif r_shoulder[-1] * l_shoulder[-1] * midhip[-1] == 0:
-        print("loss keypoints info for compute body angle")
+        print("loss points info for compute body angle")
         return angle
     else:
         v1 = r_shoulder[:3] - midhip[:3]
@@ -215,36 +229,31 @@ def get_body_angle(points_array, mode='openpose'):
         return angle
 
 
-def get_shoulder_hip_dis(points_array, mode='openpose'):
+def get_shoulder_hip_dis(point, mode='openpose'):
     if mode == "openpose":
-        r_shoulder = points_array[2, :]
-        l_shoulder = points_array[5, :]
-        midhip = points_array[8, :]
+        r_shoulder = point[2, :]
+        l_shoulder = point[5, :]
+        midhip = point[8, :]
     elif mode == 'trtpose':
-        r_shoulder = points_array[6, :]
-        l_shoulder = points_array[5, :]
-        midhip = np.mean(points_array[11:13, :], axis=0)
+        r_shoulder = point[6, :]
+        l_shoulder = point[5, :]
+        midhip = np.mean(point[11:13, :], axis=0)
     else:
         raise
 
-    dis = np.sqrt(np.sum((l_shoulder[:2]-r_shoulder[:2])**2))
-    dis += np.sqrt(np.sum((l_shoulder[:2]-midhip[:2])**2))
-    dis += np.sqrt(np.sum((r_shoulder[:2]-midhip[:2])**2))
+    dis = np.sqrt(np.sum((l_shoulder[:3]-r_shoulder[:3])**2))
+    dis += np.sqrt(np.sum((l_shoulder[:3]-midhip[:3])**2))
+    dis += np.sqrt(np.sum((r_shoulder[:3]-midhip[:3])**2))
     return dis
 
 
-def remove_outlier(points_array, idx_list=None):
-    T, D = points_array.shape
-    if idx_list is None:
-        idx_list = range(D)
-    temp_array = points_array[:, idx_list]
-    temp_mean = np.mean(temp_array, axis=0)
-    temp_std = np.std(temp_array, axis=0)
-    mask1 = temp_array > (temp_mean - 1.5*temp_std)
-    mask2 = temp_array < (temp_mean + 1.5*temp_std)
-    mask = np.prod(mask1 * mask2, axis=1) > 0
-    result_array = points_array[mask]
-    return result_array
+def get_location(point):
+    valid_point = point[point[:, 2] > 0, :3]
+    if valid_point.shape[0] == 0:
+        return np.zeros([3])
+    else:
+        valid_point = remove_outlier(valid_point, idx_list=[2])
+        return np.mean(valid_point, axis=0)
 
 
 if __name__ == "__main__":

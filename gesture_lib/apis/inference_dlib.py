@@ -17,19 +17,21 @@ class InferenceDlib(Inference):
     def __init__(self, *args, **kwargs):
         super(InferenceDlib, self).__init__(*args, **kwargs)
 
-        pre_path = "gesture_lib/apis/shape_predictor_5_face_landmarks.dat"
+        pre_path = "gesture_lib/apis/shape_predictor_68_face_landmarks.dat"
         rec_path = "gesture_lib/apis/dlib_face_recognition_resnet_model_v1.dat"
 
         self.face_pre = dlib.shape_predictor(pre_path)
         self.face_rec = dlib.face_recognition_model_v1(rec_path)
+        self.sim_thr1 = 0.35  # for memory
+        self.sim_thr2 = 0.65  # for memory cache
 
-    def _get_face_feature(self, color_image, src_keypoint):
+    def _extract_feature(self, color_image, keypoint):
         feature = np.zeros([0, 128])
         # Nose, REye, LEye, REar, LEar
         if self.mode == "openpose":
-            keypoint = src_keypoint[[0, 15, 16, 17, 18], :2]
+            keypoint = keypoint[[0, 15, 16, 17, 18], :2]
         elif self.mode == "trtpose":
-            keypoint = src_keypoint[[0, 2, 1, 4, 3], :]
+            keypoint = keypoint[[0, 2, 1, 4, 3], :]
         else:
             raise
 
@@ -58,43 +60,9 @@ class InferenceDlib(Inference):
             cv2.waitKey(1)
         return feature
 
-    def _feature_similarity(self, feature1, feature2):
+    def _person_sim(self, feature1, feature2):
         sim = 0
         if feature1.shape[0] == 0 or feature2.shape[0] == 0:
             return sim
         sim = 1 - euclidean_dis(feature1, feature2)
         return sim
-
-    def _person_sim(self, person_1, person_2):
-        return self._feature_similarity(person_1[0], person_2[0])
-
-    def _is_in_memory(self, sim, sim_thr=0.35):
-        return sim > sim_thr
-
-    def _update_memory(self, color_image, keypoints_list, points_list):
-        result_ids = []
-        # print("keypoints num: {}".format(len(keypoints_list)))
-        for keypoint, point in zip(keypoints_list, points_list):
-            face_feature = self._get_face_feature(color_image, keypoint)
-            input_info = [face_feature]
-            best_person_id, best_sim = self._find_best_match(input_info)
-
-            if best_person_id in result_ids:
-                continue
-
-            if self._is_in_memory(best_sim):
-                if self._update_output_cache(best_person_id):
-                    result_ids.append([best_person_id, best_sim])
-                else:
-                    result_ids.append(['0', 0])
-            else:
-                if self._update_memory_cache(input_info, sim_thr=0.65):
-                    self.memory['max_id'] += 1
-                    self.memory_count += 1
-                    person_id = 'person_' + str(self.memory['max_id'])
-                    self.memory[person_id] = input_info
-                    result_ids.append([person_id, 1])
-                else:
-                    result_ids.append(['0', 0])
-
-        return result_ids

@@ -21,14 +21,13 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def count_correct(predicts, labels, cls_names):
-    cls_num = len(cls_names)
     correct_dict = {}
 
     for cls_id, cls_name in enumerate(cls_names):
-        label_ids = labels==cls_id
+        label_ids = labels == cls_id
         label_num = len(labels[label_ids])
         predict = predicts[label_ids]
-        correct_num = len(predict[predict==cls_id])
+        correct_num = len(predict[predict == cls_id])
         correct_dict[cls_name] = [label_num, correct_num]
 
     return correct_dict
@@ -80,9 +79,12 @@ def test_pipeline(model, data_loader, cls_names):
 
 def parse_args():
     parser = argparse.ArgumentParser(description="gesture model training")
-    parser.add_argument('config', help='train config file path')
-    parser.add_argument('--work_dir', help='the dirs to save logs and models')
-    parser.add_argument('--gpus', type=int, default=1, help='gpu number')
+    parser.add_argument('config',
+                        help='train config file path')
+    parser.add_argument('--work_dir',
+                        help='the dirs to save logs and models')
+    parser.add_argument('--gpus', type=int, default=1,
+                        help='gpu number, default: 1')
     args = parser.parse_args()
 
     return args
