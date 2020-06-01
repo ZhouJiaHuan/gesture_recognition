@@ -60,8 +60,10 @@ class InferenceDlib(Inference):
             cv2.waitKey(1)
         return feature
 
-    def _person_sim(self, feature1, feature2):
+    def _person_sim(self, memory_info, input_info):
         sim = 0
+        feature1 = memory_info['keypoint_feature']
+        feature2 = input_info['keypoint_feature']
         if feature1.shape[0] == 0 or feature2.shape[0] == 0:
             return sim
         sim = 1 - euclidean_dis(feature1, feature2)

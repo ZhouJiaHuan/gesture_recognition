@@ -1,20 +1,20 @@
-import sys
-sys.path.append(".")
+# import sys
+# sys.path.append(".")
 
 import time
 import os
 import numpy as np
 import cv2
-from collections import Counter
 from abc import abstractmethod
 import torch
 from torch.nn.functional import softmax
 
 from mmcv import Config
-from gesture_lib.dataset import build_dataset, OpenposeExtractor, TrtposeExtractor
-from gesture_lib.model import build_model
-from .point_seq import is_static, get_body_angle, get_face_angle, get_location
+from ..dataset import build_dataset, OpenposeExtractor, TrtposeExtractor
+from ..model import build_model
+from .point_seq import is_static, get_body_angle, get_face_angle
 from .point_seq import post_process_wave, post_process_come, post_process_hello
+from .point_seq import get_keypoint_box, get_location
 
 
 class Inference(object):
@@ -235,38 +235,47 @@ class Inference(object):
         raise NotImplementedError
 
     @abstractmethod
-    def _person_sim(self, feature1, feature2):
-        ''' compute the feature similarity
+    def _person_sim(self, memory_info, input_info):
+        ''' compute the feature similarity based on memory and input_info
 
-        the type of feature1 and feature2 is decided by `_extract_feature`
+        the memory_info and input_info are dicts, which at least contain
+        following infomation:
+        - keypoint: keypoint array, for trtpose, shape 18x2
+        - point: point array, for trtpose, shape 18x2
+        - keypoint_box: minimum bounding rectangle, (x1, y1, x2, y2)
+        - point_center: 3-D location (x, y, z)
+        - keypoint_feature: feature vector extracted from color image with
+            keypoint info. The type is decided by `_extract_feature`
         '''
         raise NotImplementedError
 
     def _find_best_match(self, input_info):
         best_person_id = '0'
         best_sim = 0
-        best_pos = np.zeros(3)
 
         if self.memory['max_id'] == 0:
-            return best_person_id, best_sim, best_pos
+            return best_person_id, best_sim
 
-        for i in range(self.memory['max_id']):
-            person_id = 'person_'+str(i+1)
-            memory_info = self.memory[person_id]
-            memory_pos, input_pos = memory_info[0], input_info[0]
-            # temp_dis = np.sqrt(np.sum((memory_pos[:2]-input_pos[:2])**2))
-            # the distance between current frame and previous frame
-            # of the same person should be very small, so if the distance
-            # is very large, it is unnecessary to compare the features
-            # print("temp_dis = ", temp_dis )
-            # if memory_info[-1] is True and temp_dis > 0.5:
-            # continue
-            temp_sim = self._person_sim(memory_info[1], input_info[1])
+        for person_id, memory_info in self.memory.items():
+            if person_id == 'max_id':
+                continue
+            temp_sim = self._person_sim(memory_info, input_info)
             if temp_sim > best_sim:
                 best_sim = temp_sim
                 best_person_id = person_id
-                best_pos = input_pos
-        return best_person_id, best_sim, best_pos
+        return best_person_id, best_sim
+
+    def _prepare_input_info(self, color_image, keypoint, point):
+        input_dict = {}
+        keypoint_feature = self._extract_feature(color_image, keypoint)
+        point_center = get_location(point)
+        input_dict['keypoint'] = keypoint
+        input_dict['point'] = point
+        input_dict['keypoint_box'] = get_keypoint_box(keypoint)
+        input_dict['point_center'] = point_center
+        input_dict['keypoint_feature'] = keypoint_feature
+
+        return input_dict
 
     def _update_memory(self, color_image, keypoints_list, points_list):
         '''update memory info with current keypoints and points info
@@ -284,27 +293,19 @@ class Inference(object):
         '''
         result_ids = []
         for keypoint, point in zip(keypoints_list, points_list):
-            point_center = get_location(point)
-            keypoint_feature = self._extract_feature(color_image, keypoint)
-
-            input_info = [point_center, keypoint_feature]  # [pos, feature]
-            best_person_id, best_sim, best_pos = self._find_best_match(input_info)
+            input_info = self._prepare_input_info(color_image, keypoint, point)
+            best_person_id, best_sim = self._find_best_match(input_info)
 
             if best_person_id in result_ids:
                 continue
 
             if best_sim > self.sim_thr1:
-                self.memory[best_person_id][0] = best_pos
-                self.memory[best_person_id][-1] = True
+                # TODO: update memory info with input info
                 if self._update_output_cache(best_person_id):
-
                     result_ids.append([best_person_id, best_sim])
                 else:
                     result_ids.append(['0', 0])
             else:
-                if best_person_id != '0':
-                    self.memory[best_person_id][-1] = False
-                input_info.extend([False])  # flag for update position
                 if self._update_memory_cache(input_info):
                     self.memory['max_id'] += 1
                     person_id = 'person_' + str(self.memory['max_id'])
@@ -322,16 +323,16 @@ class Inference(object):
             self.memory_cache = []
 
         for idx, temp_info in enumerate(self.memory_cache):
-            temp_sim = self._person_sim(temp_info[1], input_info[1])
+            temp_sim = self._person_sim(temp_info[0], input_info)
             if temp_sim > self.sim_thr2:
-                self.memory_cache[idx][-1] += 1
-                self.memory_cache[idx][:len(input_info)] = input_info
-                count = self.memory_cache[idx][-1]
+                self.memory_cache[idx][1] += 1
+                self.memory_cache[idx][0] = input_info
+                count = self.memory_cache[idx][1]
                 if count >= pop_num:
                     self.memory_cache.pop(idx)
                     return True
 
-        self.memory_cache.append([*input_info, 1])
+        self.memory_cache.append([input_info, 1])
         return False
 
     def _update_output_cache(self, best_person_id, clean_num=20, pop_num=4):

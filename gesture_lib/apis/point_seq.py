@@ -256,7 +256,23 @@ def get_location(point):
         return np.mean(valid_point, axis=0)
 
 
+def get_keypoint_box(keypoint):
+    keypoint_box = np.zeros(4)  # [x1, y1, x1, y2]
+    valid_keypoint = keypoint[keypoint[:, 0] > 0, :2]
+    keypoint_num = valid_keypoint.shape[0]
+    if keypoint_num == 0:
+        return keypoint_box
+    elif keypoint_num == 1:
+        keypoint_box[:2] = valid_keypoint[0, :2]
+        keypoint_box[2:] = valid_keypoint[0, :2]
+        return keypoint_box
+    else:
+        keypoint_box[:2] = np.min(valid_keypoint, axis=0)
+        keypoint_box[2:] = np.max(valid_keypoint, axis=0)
+        return keypoint_box
+
+
 if __name__ == "__main__":
-    array = np.arange(24).reshape([8, 3])
-    result = remove_outlier(array, [1])
+    array = np.arange(24).reshape([2, 12])
+    result = get_keypoint_box(array)
     print(result)

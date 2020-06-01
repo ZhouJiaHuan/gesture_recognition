@@ -134,9 +134,9 @@ class InferenceSurf(Inference):
         similarity = num / len(matches)
         return similarity
 
-    def _person_sim(self, feature1, feature2):
-        face_feature1, body_feature1 = feature1
-        face_feature2, body_feature2 = feature2
+    def _person_sim(self, memory_info, input_info):
+        face_feature1, body_feature1 = memory_info['keypoint_feature']
+        face_feature2, body_feature2 = input_info['keypoint_feature']
         # print(face_feature1.shape, face_feature2.shape)
         # print(body_feature1.shape, body_feature2.shape)
         face_sim = self._feature_similarity(face_feature1, face_feature2)
