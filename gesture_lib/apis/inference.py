@@ -266,16 +266,23 @@ class Inference(object):
         return best_person_id, best_sim
 
     def _prepare_input_info(self, color_image, keypoint, point):
-        input_dict = {}
+        input_info = {}
         keypoint_feature = self._extract_feature(color_image, keypoint)
         point_center = get_location(point)
-        input_dict['keypoint'] = keypoint
-        input_dict['point'] = point
-        input_dict['keypoint_box'] = get_keypoint_box(keypoint)
-        input_dict['point_center'] = point_center
-        input_dict['keypoint_feature'] = keypoint_feature
+        input_info['keypoint'] = keypoint
+        input_info['point'] = point
+        input_info['keypoint_box'] = get_keypoint_box(keypoint)
+        input_info['point_center'] = point_center
+        input_info['keypoint_feature'] = keypoint_feature
 
-        return input_dict
+        return input_info
+
+    def _update_person_memory(self, person_id, input_info):
+        assert person_id in self.memory.keys()
+        self.memory[person_id]['keypoint'] = input_info['keypoint']
+        self.memory[person_id]['point'] = input_info['point']
+        self.memory[person_id]['keypoint_box'] = input_info['keypoint_box']
+        self.memory[person_id]['point_center'] = input_info['point_center']
 
     def _update_memory(self, color_image, keypoints_list, points_list):
         '''update memory info with current keypoints and points info
@@ -301,6 +308,7 @@ class Inference(object):
 
             if best_sim > self.sim_thr1:
                 # TODO: update memory info with input info
+                self._update_person_memory(best_person_id, input_info)
                 if self._update_output_cache(best_person_id):
                     result_ids.append([best_person_id, best_sim])
                 else:

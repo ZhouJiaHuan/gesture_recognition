@@ -6,6 +6,7 @@ import numpy as np
 import cv2
 
 from .inference import Inference
+from .point_seq import box_iou
 
 
 class InferenceSurf(Inference):
@@ -141,7 +142,15 @@ class InferenceSurf(Inference):
         # print(body_feature1.shape, body_feature2.shape)
         face_sim = self._feature_similarity(face_feature1, face_feature2)
         body_sim = self._feature_similarity(body_feature1, body_feature2)
-        sim = 1 * face_sim + 0.0 * body_sim
+
+        box1 = memory_info['keypoint_box']
+        box2 = input_info['keypoint_box']
+        penalty = 1 - box_iou(box1, box2, mode='diou')
+        # print("penalty = ", penalty)
+        penalty = penalty if penalty > 0.1 else 0
+        
+        sim = 1 * face_sim + 0.0 * body_sim - 0.1 * penalty
+        sim = max(0, sim)
         # print("face sim: {:.3f}, body sim: {:.3f}, total sim: {:.3f}".format(face_sim, body_sim, sim))
 
         return sim

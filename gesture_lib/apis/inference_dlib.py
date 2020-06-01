@@ -8,6 +8,7 @@ import dlib
 
 from .dlib_face import face_feature, euclidean_dis
 from .inference import Inference
+from .point_seq import box_iou
 
 
 class InferenceDlib(Inference):
@@ -66,5 +67,14 @@ class InferenceDlib(Inference):
         feature2 = input_info['keypoint_feature']
         if feature1.shape[0] == 0 or feature2.shape[0] == 0:
             return sim
-        sim = 1 - euclidean_dis(feature1, feature2)
+        dis = euclidean_dis(feature1, feature2)
+        box1 = memory_info['keypoint_box']
+        box2 = input_info['keypoint_box']
+        penalty = 1 - box_iou(box1, box2, mode='diou')
+        # print("penalty = ", penalty)
+        penalty = penalty if penalty > 0.1 else 0
+
+        sim = 1 - dis - 0.1 * penalty
+        sim = max(0, sim)
+
         return sim
