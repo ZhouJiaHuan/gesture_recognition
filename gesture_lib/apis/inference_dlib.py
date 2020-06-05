@@ -1,11 +1,9 @@
-import sys
-sys.path.append(".")
-
-import time
 import numpy as np
 import cv2
 import dlib
 
+import sys
+sys.path.append(".")
 from .dlib_face import face_feature, euclidean_dis
 from .inference import Inference
 from .point_seq import box_iou
@@ -24,7 +22,7 @@ class InferenceDlib(Inference):
         self.face_pre = dlib.shape_predictor(pre_path)
         self.face_rec = dlib.face_recognition_model_v1(rec_path)
         self.sim_thr1 = 0.35  # for memory
-        self.sim_thr2 = 0.65  # for memory cache
+        self.sim_thr2 = 0.8  # for memory cache
 
     def _extract_feature(self, color_image, keypoint):
         feature = np.zeros([0, 128])
@@ -70,11 +68,10 @@ class InferenceDlib(Inference):
         dis = euclidean_dis(feature1, feature2)
         box1 = memory_info['keypoint_box']
         box2 = input_info['keypoint_box']
-        penalty = 1 - box_iou(box1, box2, mode='diou')
-        # print("penalty = ", penalty)
-        penalty = penalty if penalty > 0.1 else 0
-
-        sim = 1 - dis - 0.1 * penalty
-        sim = max(0, sim)
-
+        if box1[2] > box1[0] and box2[2] > box2[0]:
+            # valid box
+            diou = box_iou(box1, box2, mode='diou')
+            sim = 0.5 * (1 - dis) + 0.5 * diou
+        else:
+            sim = 1 - dis
         return sim

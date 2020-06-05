@@ -1,10 +1,9 @@
-import sys
-sys.path.append(".")
-
 import time
 import numpy as np
 import cv2
 
+import sys
+sys.path.append(".")
 from .inference import Inference
 from .point_seq import box_iou
 
@@ -145,12 +144,11 @@ class InferenceSurf(Inference):
 
         box1 = memory_info['keypoint_box']
         box2 = input_info['keypoint_box']
-        penalty = 1 - box_iou(box1, box2, mode='diou')
-        # print("penalty = ", penalty)
-        penalty = penalty if penalty > 0.1 else 0
-        
-        sim = 1 * face_sim + 0.0 * body_sim - 0.1 * penalty
-        sim = max(0, sim)
+        if box1[2] > box1[0] and box2[2] > box2[0]:
+            # valid box
+            diou = box_iou(box1, box2, mode='diou')
+            sim = 0.5 * face_sim + 0.0 * body_sim + 0.5 * diou
         # print("face sim: {:.3f}, body sim: {:.3f}, total sim: {:.3f}".format(face_sim, body_sim, sim))
-
+        else:
+            sim = 1 * face_sim + 0.0 * body_sim
         return sim

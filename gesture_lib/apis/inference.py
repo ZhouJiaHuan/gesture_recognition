@@ -82,25 +82,37 @@ class Inference(object):
         # init memory and cache
         self.sim_thr1 = 0.2  # for memory
         self.sim_thr2 = 0.8  # for memory cache
-        self.max_person_one_frame = 5
-        self.memory = {'max_id': 0}
-        self.memory_capacity = 10
-        self.memory_cache = []
-        self.memory_cache_count = 0
+        self.max_person_one_frame = 5  # maximum person in a frame
+        self.memory = {}  # memory info
+        self.memory_max_id = 100  # maximum person id for record in memory
+        self.memory_capacity = 5  # memory capacity
+        self.memory_count = 0  # total person num memory recorded until now
+        self.memory_pop_id = 1  # person id for pop when capacity reached
+        self.memory_cache = []  # cache before saving to memory
+        self.memory_cache_count = 0  # visit times of cache (for clean)
 
-        self.output_cache = {}
-        self.output_cache_size = 20
-        self.max_num = 0
-        self.points_seq = {}
+        self.output_cache = {}  # cache for output (for smoothing the noise)
+        self.output_cache_size = 20  # cache capacity (for clean)
+
+        # result of current frame
+        self.person_ids = []  # for tracking: [id, sim]
+        self.points_seq = {}  # input sequence for gesture model
+        self.predict_result = {}  # gesture model output
+
+    def _get_aligned_frame(self, frames):
+        return self.extractor._get_aligned_frame(frames)
 
     def _body_keypoints(self, color_image):
         '''detect body keypoints from a frame
 
         Args:
-            frame: one frame from realsense, including color and depth frame info
+            frame: one frame from realsense, including color
+                and depth frame info
 
         Return:
-            pose keypoints array, shape (N, keypoint_num, :), (x, y) or (x, y, score)
+            keypoints: [ndarray], pose keypoints array,
+                shape (N, keypoint_num, :), (x, y) or (x, y, score)
+            cv_output: [ndarray]: output image with keypoints info.
 
         '''
         color_image = cv2.resize(color_image, (self.pose_w, self.pose_h))
@@ -111,6 +123,10 @@ class Inference(object):
         cv_output = cv2.resize(cv_output, (self.width, self.height))
 
         return keypoints, cv_output
+
+    def _keypoint_to_point(self, keypoint, depth_frame):
+        point = self.extractor.keypoint_to_point(keypoint, depth_frame)
+        return point
 
     def _sort_keypoints(self, keypoints):
         '''sort the keypoints based on the distance to frame center
@@ -169,36 +185,40 @@ class Inference(object):
         self.smooth_count += 1
         return predict_s
 
-    def _draw_person_ids(self, cv_output, keypoints, person_ids, predict_result):
+    def _draw_person_ids(self, cv_output, skeletons):
         '''
         Args:
             keypoints: shape (N, 25, 3) [x, y, score]
             person_ids: list, len = N
         '''
         result_img = cv_output.copy()
-        for idx, (person_id, sim) in enumerate(person_ids):
-            sim = round(sim, 3)
-            keypoint = keypoints[idx, :, :]
-            keypoint = keypoint[keypoint[:, -1] > 1e-2]
+        for idx, (person_id, sim) in enumerate(self.person_ids):
+            sim = round(sim, 2)
+            keypoint = skeletons[idx][0]
+            keypoint = keypoint[keypoint[:, 0] > 0]
             x1 = int(np.min(keypoint[:, 0]))
             y1 = int(np.min(keypoint[:, 1]))
             x2 = int(np.max(keypoint[:, 0]))
             y2 = int(np.max(keypoint[:, 1]))
-            cv2.rectangle(result_img, (x1,y1), (x2,y2), color=(255,0,0), thickness=2)
-            cv2.putText(result_img, person_id + ' '+str(sim), (x1,y1+20), cv2.FONT_HERSHEY_COMPLEX, 0.8, (0,0,255), 2)
-            if person_id in predict_result.keys():
-                predict_label = predict_result[person_id][0]
-                score = np.round(predict_result[person_id][1], 2)
+            cv2.rectangle(result_img, (x1, y1), (x2, y2), color=(255, 0, 0),
+                          thickness=2)
+            cv2.putText(result_img, person_id + ' '+str(sim), (x1, y1+20),
+                        cv2.FONT_HERSHEY_COMPLEX, 0.8, (0, 0, 255), 2)
+            if person_id in self.predict_result.keys():
+                predict_label = self.predict_result[person_id][0]
+                score = np.round(self.predict_result[person_id][1], 2)
                 if predict_label == "others":
                     continue
                 ss = predict_label + ' ' + str(score)
-                cv2.putText(result_img, ss, (x1,y1+40), cv2.FONT_HERSHEY_COMPLEX, 0.8, (0,0,255), 2)
+                cv2.putText(result_img, ss, (x1, y1+40),
+                            cv2.FONT_HERSHEY_COMPLEX, 0.8, (0, 0, 255), 2)
         return result_img
 
     def _draw_fps(self, image, t):
         image = np.array(image, dtype=np.uint8)
         speed = str(int(1 / t)) + ' FPS'
-        cv2.putText(image, speed, (image.shape[1]-120, 50), cv2.FONT_HERSHEY_COMPLEX, 1, (0,0,255), 2)
+        cv2.putText(image, speed, (image.shape[1]-120, 50),
+                    cv2.FONT_HERSHEY_COMPLEX, 1, (0, 0, 255), 2)
         return image
 
     def _is_valid_body_angle(self, angle):
@@ -228,6 +248,28 @@ class Inference(object):
             return False
         return True
 
+    def _detect_frame(self, color_image, depth_frame):
+        src_keypoints, cv_output = self._body_keypoints(color_image)
+        src_keypoints = self._sort_keypoints(src_keypoints)
+
+        person_num = min(src_keypoints.shape[0], self.max_person_one_frame)
+
+        skeletons = []
+        for i in range(person_num):
+            temp_keypoint = src_keypoints[i, :, :]
+            temp_point = self._keypoint_to_point(temp_keypoint, depth_frame)
+            face_angle = get_face_angle(temp_point, self.mode)
+            body_angle = get_body_angle(temp_point, self.mode)
+            # valid_body = self._is_valid_body_angle(body_angle)
+            valid_face = self._is_valid_face_angle(face_angle)
+            if valid_face:
+                skeletons.append([temp_keypoint, temp_point])
+            else:
+                print("invalid angle")
+                print("body angle: ", body_angle)
+                print("face angle: ", face_angle)
+        return skeletons, cv_output
+
     @abstractmethod
     def _extract_feature(self, color_image, keypoint):
         '''extract feature from color image with specified keypoint info.
@@ -253,17 +295,25 @@ class Inference(object):
         best_person_id = '0'
         best_sim = 0
 
-        if self.memory['max_id'] == 0:
+        if self.memory_count == 0:
             return best_person_id, best_sim
 
         for person_id, memory_info in self.memory.items():
-            if person_id == 'max_id':
-                continue
             temp_sim = self._person_sim(memory_info, input_info)
             if temp_sim > best_sim:
                 best_sim = temp_sim
                 best_person_id = person_id
         return best_person_id, best_sim
+
+    def _reset_memory_state(self):
+        for person_id in self.memory.keys():
+            self.memory[person_id]['visible'] = False
+
+    def _reset_memory_box(self):
+        for person_id in self.memory.keys():
+            visible = self.memory[person_id]['visible']
+            if visible is False:
+                self.memory[person_id]['keypoint_box'] = np.zeros(4)
 
     def _prepare_input_info(self, color_image, keypoint, point):
         input_info = {}
@@ -274,7 +324,7 @@ class Inference(object):
         input_info['keypoint_box'] = get_keypoint_box(keypoint)
         input_info['point_center'] = point_center
         input_info['keypoint_feature'] = keypoint_feature
-
+        input_info['visible'] = True
         return input_info
 
     def _update_person_memory(self, person_id, input_info):
@@ -283,46 +333,50 @@ class Inference(object):
         self.memory[person_id]['point'] = input_info['point']
         self.memory[person_id]['keypoint_box'] = input_info['keypoint_box']
         self.memory[person_id]['point_center'] = input_info['point_center']
+        self.memory[person_id]['visible'] = input_info['visible']
 
-    def _update_memory(self, color_image, keypoints_list, points_list):
+    def _pop_memory_or_not(self):
+        if len(self.memory) >= self.memory_capacity:
+            self.memory.pop(str(self.memory_pop_id), 0)
+            self.memory_pop_id = self.memory_pop_id % self.memory_max_id + 1
+
+    def _update_memory(self, color_image, skeletons):
         '''update memory info with current keypoints and points info
 
         Args:
             color_image: [ndarray], current color frame
-            keypoints_list: [array list], keypoints info extracted
-            points_list: [array list], 3-D points info computed from keypoints
-                         and depth info.
+            skeletons: [list of list], [keypoint, point]
 
         Return:
             result_ids: [list of list], [[id1, sim1], [id1, sim1], ...], when
                         the person is not in the memory, the id is set to '0'.
 
         '''
-        result_ids = []
-        for keypoint, point in zip(keypoints_list, points_list):
+
+        self.person_ids = []
+        memory_person_ids = list(self.memory.keys())
+        self._reset_memory_state()
+        for keypoint, point in skeletons:
             input_info = self._prepare_input_info(color_image, keypoint, point)
             best_person_id, best_sim = self._find_best_match(input_info)
 
-            if best_person_id in result_ids:
-                continue
-
             if best_sim > self.sim_thr1:
-                # TODO: update memory info with input info
                 self._update_person_memory(best_person_id, input_info)
                 if self._update_output_cache(best_person_id):
-                    result_ids.append([best_person_id, best_sim])
+                    self.person_ids.append([best_person_id, best_sim])
+                    memory_person_ids.remove(best_person_id)
                 else:
-                    result_ids.append(['0', 0])
+                    self.person_ids.append(['0', 0])
             else:
                 if self._update_memory_cache(input_info):
-                    self.memory['max_id'] += 1
-                    person_id = 'person_' + str(self.memory['max_id'])
+                    self._pop_memory_or_not()
+                    person_id = str(self.memory_count % self.memory_max_id + 1)
                     self.memory[person_id] = input_info
-                    result_ids.append([person_id, 1])
+                    self.person_ids.append([person_id, 1])
+                    self.memory_count += 1
                 else:
-                    result_ids.append(['0', 0])
-
-        return result_ids
+                    self.person_ids.append(['0', 0])
+        self._reset_memory_box()
 
     def _update_memory_cache(self, input_info, clean_num=20, pop_num=4):
         self.memory_cache_count += 1
@@ -358,8 +412,8 @@ class Inference(object):
         else:
             return False
 
-    def _update_points(self, current_points, person_ids):
-        for (person_id, _), point in zip(person_ids, current_points):
+    def _update_points(self, skeletons, person_ids):
+        for (person_id, _), (_, point) in zip(person_ids, skeletons):
             if person_id == '0':
                 continue
             if person_id not in self.points_seq.keys():
@@ -367,16 +421,15 @@ class Inference(object):
             self.points_seq[person_id].append(point.flatten())
 
     def _predict(self):
-        predict_result = {}
+        self.predict_result = {}
         for person_id, point_list in self.points_seq.items():
             if len(point_list) >= self.seq_len:
                 point_array = np.array(point_list, dtype='float32')
                 point_array = self.dataset._get_location_info(point_array)
                 label, score = self._predict_one_point(person_id, point_array)
-                predict_result[person_id] = [label, score]
+                self.predict_result[person_id] = [label, score]
                 self.points_seq[person_id].pop(0)
                 # del self.points_seq[person_id][:5]
-        return predict_result
 
     def infer_pipeline(self, show=False):
         '''inference pipeline for frames stream from realsense
@@ -395,48 +448,22 @@ class Inference(object):
                 continue
             else:
                 frame_number = current_frame_num
-
-            depth_frame, color_frame = self.extractor._get_aligned_frame(frames)
-
+            depth_frame, color_frame = self._get_aligned_frame(frames)
             if (not depth_frame) or (not color_frame):
                 continue
 
-            color_image = np.asanyarray(color_frame.get_data())
-
             # get 3-D points info with openpose
+            color_image = np.asanyarray(color_frame.get_data())
             time_s = time.time()
-            keypoints, cv_output = self._body_keypoints(color_image)
-            keypoints = self._sort_keypoints(keypoints)
-
-            person_num = min(keypoints.shape[0], self.max_person_one_frame)
-
-            current_points = []
-            for i in range(person_num):
-                temp_point = self.extractor.keypoint_to_point(keypoints[i, :, :], depth_frame)
-                face_angle = get_face_angle(temp_point, self.mode)
-                body_angle = get_body_angle(temp_point, self.mode)
-                # valid_body = self._is_valid_body_angle(body_angle)
-                valid_face = self._is_valid_face_angle(face_angle)
-                if valid_face:
-                    current_points.append(temp_point)
-                else:
-                    print("invalid angle")
-                    print("body angle: ", body_angle)
-                    print("face angle: ", face_angle)
-            person_ids = self._update_memory(color_image, keypoints, current_points)
-            print("person_ids = ", person_ids)
-            if len(person_ids) > 0:
-                self._update_points(current_points, person_ids)
-            # print(person_ids)
-            # t_s = time.time()
-            predict_result = self._predict()
-            # print("gesture time: {:.3f}".format((time.time()-t_s)*1000)) # 3 ms / person
-            # print("predict_result = ", predict_result)
-            cv_output = self._draw_person_ids(cv_output, keypoints, person_ids, predict_result)
-
+            skeletons, cv_output = self._detect_frame(color_image, depth_frame)
+            self._update_memory(color_image, skeletons)
+            self._update_points(skeletons, self.person_ids)
+            self._predict()
             time_e = time.time()
+
             # result visualization
             if show is True:
+                cv_output = self._draw_person_ids(cv_output, skeletons)
                 cv_output = self._draw_fps(cv_output, time_e-time_s)
                 cv2.imshow("gesture output", cv_output[:, :, ::-1])
                 cv2.waitKey(1)
