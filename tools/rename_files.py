@@ -1,8 +1,6 @@
-import sys
-sys.path.append(".")
-
-from utils import get_file_path
+from gesture_lib.utils import get_file_path
 import os
+
 
 def rename_bag(bag_dir, pre, start_idx=1):
     bag_list = get_file_path(bag_dir, filter='.bag')
@@ -26,6 +24,6 @@ def rename_txt(txt_dir, pre, start_idx=1):
         os.rename(txt_path, dst_path)
 
 
-txt_dir = "/home/zhoujh/Data/gesture_recognition/bag_files/hello_out"
+txt_dir = "/home/zhoujh/Data/gesture_recognition/bag_files/_history_data/test_aug/come"
 
-rename_txt(txt_dir, pre="hello_", start_idx=1)
+rename_txt(txt_dir, pre='come_his_')

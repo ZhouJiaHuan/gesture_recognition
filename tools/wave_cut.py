@@ -3,12 +3,10 @@
 import numpy as np 
 import matplotlib.pyplot as plt
 import os
-import matplotlib.pyplot as plt
 import glob
 import sys
-sys.path.append(".") # relative path of openpose
-
-from utils import make_dirs
+sys.path.append(".")
+from gesture_lib.utils import make_dirs
 
 
 def smooth_filter(vector):

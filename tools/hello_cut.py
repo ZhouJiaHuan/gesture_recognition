@@ -3,12 +3,10 @@
 import numpy as np 
 import matplotlib.pyplot as plt
 import os
-import matplotlib.pyplot as plt
 import glob
 import sys
-sys.path.append(".") # relative path of openpose
-
-from utils import make_dirs
+sys.path.append(".")
+from gesture_lib.utils import make_dirs
 
 
 def smooth_filter(vector):
@@ -22,7 +20,7 @@ def trunc_vector(vector):
     vector_trunc = vector.copy()
     sorted_vector = np.sort(vector_trunc)[10:-10]
     max_thr = min(sorted_vector) + 0.7*(max(sorted_vector)-min(sorted_vector))
-    min_thr = min(sorted_vector) + 0.3*(max(sorted_vector)-min(sorted_vector))
+    min_thr = min(sorted_vector) + 0.7*(max(sorted_vector)-min(sorted_vector))
     mean_thr = np.mean(np.sort(vector_trunc)[15:-15])
     vector_trunc[vector>max_thr] = np.max(vector)
     vector_trunc[vector<min_thr] = np.min(vector)

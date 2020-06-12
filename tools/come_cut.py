@@ -3,15 +3,13 @@
 import numpy as np 
 import matplotlib.pyplot as plt
 import os
-import matplotlib.pyplot as plt
 import glob
-import sys
-sys.path.append(".") # relative path of openpose
 
 from tqdm import tqdm
-from utils import make_dirs
-
-from dataset.transforms import BodyZeroInterpolation
+import sys
+sys.path.append(".")
+from gesture_lib.utils import make_dirs
+from gesture_lib.dataset.transforms import BodyZeroInterpolation
 
 def smooth_filter(vector):
     L = vector.shape[0]
@@ -96,7 +94,7 @@ def split(txt_dir, out_dir, col, ext='op-25.txt'):
         sub_dir = os.path.join(out_dir, txt_name)
         make_dirs(sub_dir)
         points = np.loadtxt(txt_path)
-        points = BodyZeroInterpolation(d=3, index_list=[col//3])(points)
+        points = BodyZeroInterpolation(index_list=[col//3])(points)
         vector = points[:,col]
         rel_min, rel_max = arg_relmaxmin(vector)
         print(rel_min, rel_max)
