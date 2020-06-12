@@ -272,6 +272,17 @@ def get_keypoint_box(keypoint):
         return keypoint_box
 
 
+def sort_keypoints(keypoints, refer_pos):
+    '''sort the keypoints based on the distance to reference position
+    '''
+    if keypoints.shape[0] == 0:
+        return keypoints
+    keypoints_center = np.mean(keypoints[:, :, :2], axis=1)
+    keypoints_center = keypoints_center - refer_pos
+    d_to_center = keypoints_center[:, 0] ** 2 + keypoints_center[:, 1] ** 2
+    order = np.argsort(d_to_center)
+    return keypoints[order]
+
 def box_iou(box1, box2, mode='iou'):
     assert mode in ['iou', 'diou']
     x11, y11, x12, y12 = box1

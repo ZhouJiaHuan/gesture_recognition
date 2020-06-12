@@ -4,14 +4,14 @@ import numpy as np
 import cv2
 from abc import abstractmethod
 import torch
+
+
 from torch.nn.functional import softmax
 
 from mmcv import Config
 from ..dataset import build_dataset, OpenposeExtractor, TrtposeExtractor
 from ..model import build_model
-from .point_seq import is_static, get_body_angle, get_face_angle
-from .point_seq import post_process_wave, post_process_come, post_process_hello
-from .point_seq import get_keypoint_box, get_location, get_max_diou_skeleton
+from .point_seq import *
 
 
 class Inference(object):
@@ -21,7 +21,6 @@ class Inference(object):
            or model with stronger robustness (more data, better model)
         2. try multi-thread for higher inference speed
         3. is siamese suitable for tracking in this application?
-        4. yaml configure file for parameters management
     '''
 
     def __init__(self,
@@ -44,18 +43,21 @@ class Inference(object):
         self.idx_list = self.dataset.idx_list
         self.transforms = self.dataset.transforms
 
-        # configure gesture model
-        self.seq_len = seq_len
-        self.gesture_model = build_model(cfg.model).cuda()
-        self.gesture_model.load_state_dict(torch.load(checkpoints))
-        self.gesture_model.eval()
-
-        # configure pose model
+        # init gesture estimation, gesture recognition and memory for tracking
         self.width = 640
         self.height = 480
         self.pose_w = 224
         self.pose_h = 224
         self.op_wrapper = None
+        self._init_gesture_est(op_model, model_pose, trt_model, pose_json_path)
+        self._init_gesture_rec(cfg.model, checkpoints, seq_len)
+        self._init_memory()
+
+        # configure realsense camera
+        self.rs_pipe = self.extractor.rs_pipe
+        self.rs_cfg = self.extractor.rs_cfg
+
+    def _init_gesture_est(self, op_model, model_pose, trt_model, pose_json_path):
         if op_model is not None:
             self.mode = "openpose"
             self.extractor = OpenposeExtractor(op_model, model_pose)
@@ -74,15 +76,26 @@ class Inference(object):
         else:
             raise
 
-        # configure realsense camera
-        self.rs_pipe = self.extractor.rs_pipe
-        self.rs_cfg = self.extractor.rs_cfg
+        # result of current frame
+        self.person_ids = []  # for tracking: [id, sim]
+
+    def _init_gesture_rec(self, model_cfg, checkpoints, seq_len):
+        # result of current frame
+        self.points_seq = {}  # input sequence for gesture model
+        self.predict_result = {}  # gesture model output
 
         # init params for smoothing result
         self.predict = {}
         self.smooth_count = 0
 
-        # init memory and cache
+        # configure model
+        self.seq_len = seq_len
+        self.gesture_model = build_model(model_cfg).cuda()
+        self.gesture_model.load_state_dict(torch.load(checkpoints))
+        self.gesture_model.eval()
+
+    def _init_memory(self):
+        # memory and cache
         self.sim_thr1 = 0.2  # for memory
         self.sim_thr2 = 0.8  # for memory cache
         self.max_person_one_frame = 5  # maximum person in a frame
@@ -97,10 +110,8 @@ class Inference(object):
         self.output_cache = {}  # cache for output (for smoothing the noise)
         self.output_cache_size = 20  # cache capacity (for clean)
 
-        # result of current frame
-        self.person_ids = []  # for tracking: [id, sim]
-        self.points_seq = {}  # input sequence for gesture model
-        self.predict_result = {}  # gesture model output
+
+
 
         # target info for single person tracking
         self.target = {'person_id': '0', 'miss_times': 0}
@@ -134,17 +145,6 @@ class Inference(object):
     def _keypoint_to_point(self, keypoint, depth_frame):
         point = self.extractor.keypoint_to_point(keypoint, depth_frame)
         return point
-
-    def _sort_keypoints(self, keypoints):
-        '''sort the keypoints based on the distance to frame center
-        '''
-        if keypoints.shape[0] == 0:
-            return keypoints
-        keypoints_center = np.mean(keypoints[:, :, :2], axis=1)
-        keypoints_center = keypoints_center - [self.width, self.height]
-        d_to_center = keypoints_center[:, 0] ** 2 + keypoints_center[:, 1] ** 2
-        order = np.argsort(d_to_center)
-        return keypoints[order]
 
     def _post_process(self, points_array, label):
         if label == "wave":
@@ -269,7 +269,8 @@ class Inference(object):
 
     def _detect_frame(self, color_image, depth_frame):
         src_keypoints, cv_output = self._body_keypoints(color_image)
-        src_keypoints = self._sort_keypoints(src_keypoints)
+        frame_center = [self.width/2, self.height/2]
+        src_keypoints = sort_keypoints(src_keypoints, frame_center)
 
         person_num = min(src_keypoints.shape[0], self.max_person_one_frame)
 
@@ -280,8 +281,8 @@ class Inference(object):
             face_angle = get_face_angle(temp_point, self.mode)
             body_angle = get_body_angle(temp_point, self.mode)
             valid_body = self._is_valid_body_angle(body_angle)
-            # valid_face = self._is_valid_face_angle(face_angle)
-            if valid_body:
+            valid_face = self._is_valid_face_angle(face_angle)
+            if valid_body or valid_face:
                 skeletons.append([temp_keypoint, temp_point])
             else:
                 print("invalid angle")
@@ -455,45 +456,6 @@ class Inference(object):
                 self.predict_result[person_id] = [label, score]
                 self.points_seq[person_id].pop(0)
                 # del self.points_seq[person_id][:5]
-
-    def infer_pipeline(self, show=False):
-        '''inference pipeline for frames stream from realsense
-        '''
-        self.rs_pipe.start(self.rs_cfg)
-        if self.op_wrapper is not None:
-            self.op_wrapper.start()
-
-        frame_number = 0
-        while True:
-            print('------------------------------')
-            # get a frame of color image and depth image
-            frames = self.rs_pipe.wait_for_frames(timeout_ms=5000)
-            current_frame_num = frames.get_frame_number()
-            if current_frame_num == frame_number:
-                continue
-            else:
-                frame_number = current_frame_num
-            depth_frame, color_frame = self._get_aligned_frame(frames)
-            if (not depth_frame) or (not color_frame):
-                continue
-
-            # get 3-D points info with openpose
-            color_image = np.asanyarray(color_frame.get_data())
-            time_s = time.time()
-            skeletons, cv_output = self._detect_frame(color_image, depth_frame)
-            self._update_memory(color_image, skeletons)
-            self._update_points(skeletons, self.person_ids)
-            self._predict()
-            time_e = time.time()
-
-            # result visualization
-            if show is True:
-                cv_output = self._draw_person_ids(cv_output, skeletons)
-                cv_output = self._draw_fps(cv_output, time_e-time_s)
-                cv2.imshow("gesture output", cv_output[:, :, ::-1])
-                cv2.waitKey(1)
-        if self.op_wrapper is not None:
-            self.op_wrapper.stop()
 
     def _update_trigger(self, trigger='hello'):
         trigger_dict = {k: v for k, v in self.predict_result.items()
