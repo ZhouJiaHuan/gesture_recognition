@@ -2,14 +2,14 @@ This repository realize the simple gestures recognition based on skeletons infor
 
 - get a sequence of frames from the depth camera (eg., realsense), including the color frame and depth frame
 - extract the skeletons informations with `openpose body-25` model or `trt-pose body-18` model.
-- track person with  `SURF` or `AKAZE` feature
+- track person with specified feature. using features extracted with `SURF` for higher speed and features extracted with dlib face module for higher accuracy 
 - parse the 3-d location of the 25 body key points from realsense camera
 - predict the gestures from fixed length of frames (eg., 30 frames) with LSTM model
 
 # Dependence
 
 - python 3.6
-- OpenCV 3.4.2 (with extra modules)
+- OpenCV 3.4.2 (with extra modules for `SURF` feature)
 - PyTorch 1.4 (with torchvision)
 - openpose library
 - realsense library
@@ -51,4 +51,4 @@ python tools/camera_inference.py CONFIG CHECKPOINT --op_model OP_MODEL]
        --seq_len SEQ_LEN --show                    
 ```
 
-For specified example, see `camera_inference_op.sh` and `camera_inference_trt.sh`.
+For specified example, see `inference_surf_op.sh` and `camera_inference_surf_trt.sh`.

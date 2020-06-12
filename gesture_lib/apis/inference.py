@@ -1,6 +1,3 @@
-# import sys
-# sys.path.append(".")
-
 import time
 import os
 import numpy as np
@@ -14,11 +11,17 @@ from ..dataset import build_dataset, OpenposeExtractor, TrtposeExtractor
 from ..model import build_model
 from .point_seq import is_static, get_body_angle, get_face_angle
 from .point_seq import post_process_wave, post_process_come, post_process_hello
-from .point_seq import get_keypoint_box, get_location
+from .point_seq import get_keypoint_box, get_location, get_max_diou_skeleton
 
 
 class Inference(object):
     '''inference of body keypoints model for video from realsense
+    TODO:
+        1. gesture recognition is not stable, need better smooth strategy
+           or model with stronger robustness (more data, better model)
+        2. try multi-thread for higher inference speed
+        3. is siamese suitable for tracking in this application?
+        4. yaml configure file for parameters management
     '''
 
     def __init__(self,
@@ -98,6 +101,10 @@ class Inference(object):
         self.person_ids = []  # for tracking: [id, sim]
         self.points_seq = {}  # input sequence for gesture model
         self.predict_result = {}  # gesture model output
+
+        # target info for single person tracking
+        self.target = {'person_id': '0', 'miss_times': 0}
+        self.target_miss_max_times = 30
 
     def _get_aligned_frame(self, frames):
         return self.extractor._get_aligned_frame(frames)
@@ -192,6 +199,7 @@ class Inference(object):
             person_ids: list, len = N
         '''
         result_img = cv_output.copy()
+        print("self.person_ids: ", self.person_ids)
         for idx, (person_id, sim) in enumerate(self.person_ids):
             sim = round(sim, 2)
             keypoint = skeletons[idx][0]
@@ -220,6 +228,17 @@ class Inference(object):
         cv2.putText(image, speed, (image.shape[1]-120, 50),
                     cv2.FONT_HERSHEY_COMPLEX, 1, (0, 0, 255), 2)
         return image
+
+    def _draw_target(self, cv_output):
+        result_img = cv_output.copy()
+        target_person = self.target['person_id']
+        if target_person == '0':
+            return result_img
+        target_box = self.memory[target_person]['keypoint_box']
+        x1, y1, x2, y2 = np.int32(target_box)
+        cv2.rectangle(result_img, (x1, y1), (x2, y2), color=(0, 0, 255),
+                      thickness=4)
+        return result_img
 
     def _is_valid_body_angle(self, angle):
         # print("angle = {}".format(angle))
@@ -260,9 +279,9 @@ class Inference(object):
             temp_point = self._keypoint_to_point(temp_keypoint, depth_frame)
             face_angle = get_face_angle(temp_point, self.mode)
             body_angle = get_body_angle(temp_point, self.mode)
-            # valid_body = self._is_valid_body_angle(body_angle)
-            valid_face = self._is_valid_face_angle(face_angle)
-            if valid_face:
+            valid_body = self._is_valid_body_angle(body_angle)
+            # valid_face = self._is_valid_face_angle(face_angle)
+            if valid_body:
                 skeletons.append([temp_keypoint, temp_point])
             else:
                 print("invalid angle")
@@ -315,8 +334,13 @@ class Inference(object):
             if visible is False:
                 self.memory[person_id]['keypoint_box'] = np.zeros(4)
 
-    def _prepare_input_info(self, color_image, keypoint, point):
+    def _reset_target(self):
+        self.target['person_id'] = '0'
+        self.target['miss_times'] = 0
+
+    def _prepare_input_info(self, color_image, skeleton):
         input_info = {}
+        keypoint, point = skeleton
         keypoint_feature = self._extract_feature(color_image, keypoint)
         point_center = get_location(point)
         input_info['keypoint'] = keypoint
@@ -356,8 +380,8 @@ class Inference(object):
         self.person_ids = []
         memory_person_ids = list(self.memory.keys())
         self._reset_memory_state()
-        for keypoint, point in skeletons:
-            input_info = self._prepare_input_info(color_image, keypoint, point)
+        for skeleton in skeletons:
+            input_info = self._prepare_input_info(color_image, skeleton)
             best_person_id, best_sim = self._find_best_match(input_info)
 
             if best_sim > self.sim_thr1:
@@ -414,6 +438,7 @@ class Inference(object):
 
     def _update_points(self, skeletons, person_ids):
         for (person_id, _), (_, point) in zip(person_ids, skeletons):
+            print('person_id: ', person_id)
             if person_id == '0':
                 continue
             if person_id not in self.points_seq.keys():
@@ -467,5 +492,103 @@ class Inference(object):
                 cv_output = self._draw_fps(cv_output, time_e-time_s)
                 cv2.imshow("gesture output", cv_output[:, :, ::-1])
                 cv2.waitKey(1)
+        if self.op_wrapper is not None:
+            self.op_wrapper.stop()
+
+    def _update_trigger(self, trigger='hello'):
+        trigger_dict = {k: v for k, v in self.predict_result.items()
+                        if v[0] == trigger}
+        if len(trigger_dict) > 0:
+            # predict_results = {person_id: [label, score], ...}
+            target = sorted(trigger_dict.items(), key=lambda kv: kv[1][1])
+            self.target['person_id'] = target[-1][0]
+
+    def _multi_track(self, color_image, skeletons):
+        self._update_memory(color_image, skeletons)
+        self._update_points(skeletons, self.person_ids)
+        self._predict()
+        self._update_trigger(trigger='hello')
+
+    def _single_track(self, color_image, skeletons):
+        # print("in single track, target = ", self.target)
+        self.person_ids = []
+        self._reset_memory_state()
+        target_person = self.target['person_id']
+        if len(skeletons) > 0:
+            memory_info = self.memory[target_person]
+            target_box = memory_info['keypoint_box']
+            prop_skeleton = get_max_diou_skeleton(target_box, skeletons)
+            input_info = self._prepare_input_info(color_image, prop_skeleton)
+            sim = self._person_sim(memory_info, input_info)
+
+            if sim > self.sim_thr1:
+                # find track target
+                self._update_person_memory(target_person, input_info)
+                self.person_ids.append([target_person, sim])
+                self.target['miss_times'] = 0
+            else:
+                self.target['miss_times'] += 1
+                if self.target['miss_times'] >= self.target_miss_max_times:
+                    # lose track target
+                    self._reset_target()
+                    self.person_ids.append(['0', 0])
+                    return False
+                else:
+                    return True
+            self._reset_memory_box()
+            self._update_points([prop_skeleton], self.person_ids)
+            self._predict()
+            trigger, score = self.predict_result[target_person]
+            if trigger == 'come' and score > 0.8:
+                print("come: service state.")
+                return True
+            if trigger == 'wave' and score > 0.8:
+                self._reset_target()
+                print("wave: service canceled.")
+                return False
+        else:
+            # lose track target
+            self._reset_memory_box()
+            self._reset_target()
+            return False
+
+    def run(self, show=False):
+        self.rs_pipe.start(self.rs_cfg)
+        if self.op_wrapper is not None:
+            self.op_wrapper.start()
+
+        frame_number = 0
+        while True:
+            print('------------------------------')
+            try:
+                # get a frame of color image and depth image
+                frames = self.rs_pipe.wait_for_frames(timeout_ms=5000)
+            except RuntimeError:
+                print("Out of time for frames")
+                break
+            current_frame_num = frames.get_frame_number()
+            if current_frame_num == frame_number:
+                continue
+            else:
+                frame_number = current_frame_num
+            depth_frame, color_frame = self._get_aligned_frame(frames)
+            if (not depth_frame) or (not color_frame):
+                continue
+            color_image = np.asanyarray(color_frame.get_data())
+            time_s = time.time()
+            skeletons, cv_output = self._detect_frame(color_image, depth_frame)
+            target_person = self.target['person_id']
+            if target_person == '0':
+                self._multi_track(color_image, skeletons)
+            else:
+                self._single_track(color_image, skeletons)
+            time_e = time.time()
+            if show is True:
+                cv_output = self._draw_person_ids(cv_output, skeletons)
+                cv_output = self._draw_fps(cv_output, time_e-time_s)
+                cv_output = self._draw_target(cv_output)
+                cv2.imshow("gesture output", cv_output[:, :, ::-1])
+                cv2.waitKey(1)
+
         if self.op_wrapper is not None:
             self.op_wrapper.stop()

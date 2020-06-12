@@ -57,7 +57,7 @@ def main():
                                      trt_model=args.trt_model,
                                      pose_json_path=args.trt_json,
                                      )
-    camera_infer.infer_pipeline(show=args.show)
+    camera_infer.run(show=args.show)
 
 
 if __name__ == "__main__":

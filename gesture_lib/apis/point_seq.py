@@ -298,7 +298,20 @@ def box_iou(box1, box2, mode='iou'):
         return diou
     else:
         raise
-    
+
+
+def get_max_diou_skeleton(target_box, skeletons):
+    diou_list = []
+    for keypoint, _ in skeletons:
+        current_box = get_keypoint_box(keypoint)
+        current_diou = box_iou(target_box, current_box)
+        diou_list.append(current_diou)
+    idx = np.argmax(diou_list)
+    return skeletons[idx]
+
+
+
+
 if __name__ == "__main__":
     array = np.arange(24).reshape([2, 12])
     result = get_keypoint_box(array)
