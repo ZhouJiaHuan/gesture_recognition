@@ -1,6 +1,7 @@
 import time
 import os
 import numpy as np
+from collections import Counter
 import cv2
 from abc import abstractmethod
 import torch
@@ -100,22 +101,19 @@ class Inference(object):
         self.sim_thr2 = 0.8  # for memory cache
         self.max_person_one_frame = 5  # maximum person in a frame
         self.memory = {}  # memory info
-        self.memory_max_id = 100  # maximum person id for record in memory
-        self.memory_capacity = 5  # memory capacity
+        self.memory_params = {'max_id': 100, 'capacity': 5}
         self.memory_count = 0  # total person num memory recorded until now
         self.memory_pop_id = 1  # person id for pop when capacity reached
+
         self.memory_cache = []  # cache before saving to memory
         self.memory_cache_count = 0  # visit times of cache (for clean)
 
         self.output_cache = {}  # cache for output (for smoothing the noise)
         self.output_cache_size = 20  # cache capacity (for clean)
 
-
-
-
         # target info for single person tracking
-        self.target = {'person_id': '0', 'miss_times': 0}
-        self.target_miss_max_times = 30
+        self.target = {'person_id': '0', 'miss_times': 0, 'vote_prop': []}
+        self.target_params = {'max_miss_times': 30, 'vote_len': 5}
 
     def _get_aligned_frame(self, frames):
         return self.extractor._get_aligned_frame(frames)
@@ -191,6 +189,18 @@ class Inference(object):
         self.predict[person_id] = predict_s
         self.smooth_count += 1
         return predict_s
+
+    def _update_target_vote_prop(self, label, default='others'):
+        prop_num = len(self.target['vote_prop'])
+        if prop_num >= self.target_params['vote_len']:
+            self.target['vote_prop'].pop(0)
+        self.target['vote_prop'].append(label)
+        vote_prop = self.target['vote_prop']
+        if len(vote_prop) < self.target_params['vote_len']:
+            return default
+        else:
+            prop_label = Counter(vote_prop).most_common(1)[0][0]
+            return prop_label
 
     def _draw_person_ids(self, cv_output, skeletons):
         '''
@@ -338,6 +348,7 @@ class Inference(object):
     def _reset_target(self):
         self.target['person_id'] = '0'
         self.target['miss_times'] = 0
+        self.target['vote_prop'] = []
 
     def _prepare_input_info(self, color_image, skeleton):
         input_info = {}
@@ -361,9 +372,11 @@ class Inference(object):
         self.memory[person_id]['visible'] = input_info['visible']
 
     def _pop_memory_or_not(self):
-        if len(self.memory) >= self.memory_capacity:
+        capacity = self.memory_params['capacity']
+        if len(self.memory) >= capacity:
+            max_id = self.memory_params['max_id']
             self.memory.pop(str(self.memory_pop_id), 0)
-            self.memory_pop_id = self.memory_pop_id % self.memory_max_id + 1
+            self.memory_pop_id = self.memory_pop_id % max_id + 1
 
     def _update_memory(self, color_image, skeletons):
         '''update memory info with current keypoints and points info
@@ -395,7 +408,8 @@ class Inference(object):
             else:
                 if self._update_memory_cache(input_info):
                     self._pop_memory_or_not()
-                    person_id = str(self.memory_count % self.memory_max_id + 1)
+                    max_id = self.memory_params['max_id']
+                    person_id = str(self.memory_count % max_id + 1)
                     self.memory[person_id] = input_info
                     self.person_ids.append([person_id, 1])
                     self.memory_count += 1
@@ -490,7 +504,8 @@ class Inference(object):
                 self.target['miss_times'] = 0
             else:
                 self.target['miss_times'] += 1
-                if self.target['miss_times'] >= self.target_miss_max_times:
+                max_miss_times = self.target_params['max_miss_times']
+                if self.target['miss_times'] >= max_miss_times:
                     # lose track target
                     self._reset_target()
                     self.person_ids.append(['0', 0])
@@ -501,6 +516,7 @@ class Inference(object):
             self._update_points([prop_skeleton], self.person_ids)
             self._predict()
             trigger, score = self.predict_result[target_person]
+            trigger = self._update_target_vote_prop(trigger)
             if trigger == 'come' and score > 0.8:
                 print("come: service state.")
                 return True
@@ -509,10 +525,15 @@ class Inference(object):
                 print("wave: service canceled.")
                 return False
         else:
-            # lose track target
-            self._reset_memory_box()
-            self._reset_target()
-            return False
+            self.target['miss_times'] += 1
+            max_miss_times = self.target_params['max_miss_times']
+            if self.target['miss_times'] >= max_miss_times:
+                # lose track target
+                self._reset_memory_box()
+                self._reset_target()
+                return False
+            else:
+                return True
 
     def run(self, show=False):
         self.rs_pipe.start(self.rs_cfg)
