@@ -12,6 +12,7 @@ from torch.nn.functional import softmax
 from mmcv import Config
 from ..dataset import build_dataset, OpenposeExtractor, TrtposeExtractor
 from ..model import build_model
+from gesture_lib.model.matcher import DlibMatcher, SurfMatcher
 from .point_seq import *
 
 
@@ -31,8 +32,11 @@ class Inference(object):
                  op_model=None,
                  model_pose='BODY_25',
                  trt_model=None,
-                 pose_json_path=None):
+                 pose_json_path=None,
+                 matcher='surf'):
         assert os.path.splitext(checkpoints)[-1] == '.pth'
+        assert matcher in ('dlib', 'surf')
+        
         cfg = Config.fromfile(cfg_path)
         print(dict(cfg))
 
@@ -44,21 +48,23 @@ class Inference(object):
         self.idx_list = self.dataset.idx_list
         self.transforms = self.dataset.transforms
 
-        # init gesture estimation, gesture recognition and memory for tracking
+        # configure gesture estimation, gesture recognition,
+        # matcher and memory for tracking
         self.width = 640
         self.height = 480
         self.pose_w = 224
         self.pose_h = 224
         self.op_wrapper = None
-        self._init_gesture_est(op_model, model_pose, trt_model, pose_json_path)
-        self._init_gesture_rec(cfg.model, checkpoints, seq_len)
+        self._configure_gesture_est(op_model, model_pose, trt_model, pose_json_path)
+        self._configure_gesture_rec(cfg.model, checkpoints, seq_len)
+        self._configure_matcher(matcher)
         self._init_memory()
 
         # configure realsense camera
         self.rs_pipe = self.extractor.rs_pipe
         self.rs_cfg = self.extractor.rs_cfg
 
-    def _init_gesture_est(self, op_model, model_pose, trt_model, pose_json_path):
+    def _configure_gesture_est(self, op_model, model_pose, trt_model, pose_json_path):
         if op_model is not None:
             self.mode = "openpose"
             self.extractor = OpenposeExtractor(op_model, model_pose)
@@ -80,7 +86,7 @@ class Inference(object):
         # result of current frame
         self.person_ids = []  # for tracking: [id, sim]
 
-    def _init_gesture_rec(self, model_cfg, checkpoints, seq_len):
+    def _configure_gesture_rec(self, model_cfg, checkpoints, seq_len):
         # result of current frame
         self.points_seq = {}  # input sequence for gesture model
         self.predict_result = {}  # gesture model output
@@ -95,6 +101,12 @@ class Inference(object):
         self.gesture_model.load_state_dict(torch.load(checkpoints))
         self.gesture_model.eval()
 
+    def _configure_matcher(self, matcher):
+        if matcher == 'dlib':
+            self.matcher = DlibMatcher(self.mode)
+        elif matcher == 'surf':
+            self.matcher = SurfMatcher(self.mode)
+        
     def _init_memory(self):
         # memory and cache
         self.sim_thr1 = 0.2  # for memory
@@ -300,13 +312,11 @@ class Inference(object):
                 print("face angle: ", face_angle)
         return skeletons, cv_output
 
-    @abstractmethod
-    def _extract_feature(self, color_image, keypoint):
+    def _extract_feature(self, img_bgr, keypoint):
         '''extract feature from color image with specified keypoint info.
         '''
-        raise NotImplementedError
+        return self.matcher.extract_feature(img_bgr, keypoint)
 
-    @abstractmethod
     def _person_sim(self, memory_info, input_info):
         ''' compute the feature similarity based on memory and input_info
 
@@ -319,7 +329,7 @@ class Inference(object):
         - keypoint_feature: feature vector extracted from color image with
             keypoint info. The type is decided by `_extract_feature`
         '''
-        raise NotImplementedError
+        return self.matcher.match(memory_info, input_info)
 
     def _find_best_match(self, input_info):
         best_person_id = '0'

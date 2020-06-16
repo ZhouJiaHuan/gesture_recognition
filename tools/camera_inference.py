@@ -1,7 +1,7 @@
 import argparse
 import sys
 sys.path.append(".")
-from gesture_lib.apis import InferenceSurf, InferenceDlib
+from gesture_lib.apis import Inference
 
 
 def parse_args():
@@ -18,8 +18,8 @@ def parse_args():
                         help="path to trt pose json file, ignored when using openpose")
     parser.add_argument('--seq_len', type=int, default=30,
                         help="sequence length for recognition, default 30")
-    parser.add_argument('--dlib', action='store_true',
-                        help="whether to use dlib for face feature extraction or not")
+    parser.add_argument('--matcher', default='dlib',
+                        help="matcher for compute person similarity")
     parser.add_argument('--show', action='store_true',
                         help="show the recognition result or not")
     args = parser.parse_args()
@@ -41,22 +41,14 @@ def main():
         print("invalid .pth checkpoint file!")
         raise
 
-    if args.dlib:
-        camera_infer = InferenceDlib(cfg_path=cfg_path,
-                                     checkpoints=ckp,
-                                     seq_len=args.seq_len,
-                                     op_model=args.op_model,
-                                     trt_model=args.trt_model,
-                                     pose_json_path=args.trt_json,
-                                     )
-    else:
-        camera_infer = InferenceSurf(cfg_path=cfg_path,
-                                     checkpoints=ckp,
-                                     seq_len=args.seq_len,
-                                     op_model=args.op_model,
-                                     trt_model=args.trt_model,
-                                     pose_json_path=args.trt_json,
-                                     )
+    camera_infer = Inference(cfg_path=cfg_path,
+                                checkpoints=ckp,
+                                seq_len=args.seq_len,
+                                op_model=args.op_model,
+                                trt_model=args.trt_model,
+                                pose_json_path=args.trt_json,
+                                matcher=args.matcher
+                                )
     camera_infer.run(show=args.show)
 
 
