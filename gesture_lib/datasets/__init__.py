@@ -9,14 +9,3 @@ from .trt_body18_dataset import TrtBody18Dataset
 
 from .registry import DATASET, PIPELINES
 from .builder import build_dataset
-
-__all__ = ['BodyExtractor',
-           'OpenposeExtractor',
-           'TrtposeExtractor',
-           'BodyGenerator',
-           'OpBody25Dataset',
-           'TrtBody18Dataset',
-           'DATASET',
-           'PIPELINES',
-           'build_dataset'
-           ]

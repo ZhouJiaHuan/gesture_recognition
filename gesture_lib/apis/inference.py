@@ -6,14 +6,14 @@ import cv2
 from abc import abstractmethod
 import torch
 
-
 from torch.nn.functional import softmax
 
 from mmcv import Config
-from ..dataset import build_dataset, OpenposeExtractor, TrtposeExtractor
-from ..model import build_model
-from gesture_lib.model.matcher import DlibMatcher, SurfMatcher
-from .point_seq import *
+from gesture_lib.datasets import build_dataset, OpenposeExtractor, TrtposeExtractor
+from gesture_lib.models import build_model
+from gesture_lib.models import DlibMatcher, SurfMatcher
+from gesture_lib.utils import box_iou
+from gesture_lib.ops.point_seq import *
 
 
 class Inference(object):
@@ -345,15 +345,28 @@ class Inference(object):
                 best_person_id = person_id
         return best_person_id, best_sim
 
+
+    def _get_max_diou_skeleton(self, target_box, skeletons):
+        diou_list = []
+        for keypoint, _ in skeletons:
+            current_box = get_keypoint_box(keypoint)
+            current_diou = box_iou(target_box, current_box)
+            diou_list.append(current_diou)
+        idx = np.argmax(diou_list)
+        return skeletons[idx]
+
     def _reset_memory_state(self):
         for person_id in self.memory.keys():
             self.memory[person_id]['visible'] = False
 
-    def _reset_memory_box(self):
+    def _reset_memory_info(self):
         for person_id in self.memory.keys():
             visible = self.memory[person_id]['visible']
             if visible is False:
+                self.memory[person_id]['keypoint'] *= 0
+                self.memory[person_id]['point'] *= 0
                 self.memory[person_id]['keypoint_box'] = np.zeros(4)
+                self.memory[person_id]['point_center'] = np.zeros(3)
 
     def _reset_target(self):
         self.target['person_id'] = '0'
@@ -425,7 +438,7 @@ class Inference(object):
                     self.memory_count += 1
                 else:
                     self.person_ids.append(['0', 0])
-        self._reset_memory_box()
+        self._reset_memory_info()
 
     def _update_memory_cache(self, input_info, clean_num=20, pop_num=4):
         self.memory_cache_count += 1
@@ -503,7 +516,7 @@ class Inference(object):
         if len(skeletons) > 0:
             memory_info = self.memory[target_person]
             target_box = memory_info['keypoint_box']
-            prop_skeleton = get_max_diou_skeleton(target_box, skeletons)
+            prop_skeleton = self._get_max_diou_skeleton(target_box, skeletons)
             input_info = self._prepare_input_info(color_image, prop_skeleton)
             sim = self._person_sim(memory_info, input_info)
 
@@ -522,7 +535,7 @@ class Inference(object):
                     return False
                 else:
                     return True
-            self._reset_memory_box()
+            self._reset_memory_info()
             self._update_points([prop_skeleton], self.person_ids)
             self._predict()
             trigger, score = self.predict_result[target_person]
@@ -539,7 +552,7 @@ class Inference(object):
             max_miss_times = self.target_params['max_miss_times']
             if self.target['miss_times'] >= max_miss_times:
                 # lose track target
-                self._reset_memory_box()
+                self._reset_memory_info()
                 self._reset_target()
                 return False
             else:

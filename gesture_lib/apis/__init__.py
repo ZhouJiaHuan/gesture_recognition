@@ -1,3 +1,2 @@
 from .inference import Inference
-
-__all__ = ['Inference']
+from .train import train_pipeline, test_pipeline

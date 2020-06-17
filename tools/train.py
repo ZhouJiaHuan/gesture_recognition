@@ -1,80 +1,23 @@
 # Description: model training
 # Author: ZhouJH
 # Data: 2020/4/8
+
+
 import os
 import numpy as np
-from tqdm import tqdm
 import torch
-from torch.utils.data import DataLoader
-from torch.optim import lr_scheduler
-from tensorboardX import SummaryWriter
-
-from mmcv import Config
 import time
 import argparse
 import sys
 sys.path.append(".")
+from torch.utils.data import DataLoader
+from torch.optim import lr_scheduler
+from tensorboardX import SummaryWriter
+from mmcv import Config
 from gesture_lib.utils import make_dirs
-from gesture_lib.model import build_model
-from gesture_lib.dataset import build_dataset
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-
-def count_correct(predicts, labels, cls_names):
-    correct_dict = {}
-
-    for cls_id, cls_name in enumerate(cls_names):
-        label_ids = labels == cls_id
-        label_num = len(labels[label_ids])
-        predict = predicts[label_ids]
-        correct_num = len(predict[predict == cls_id])
-        correct_dict[cls_name] = [label_num, correct_num]
-
-    return correct_dict
-
-
-def merge_batch_correct(dict1, dict2):
-    dict3 = dict1.copy()
-    for key, value in dict2.items():
-        dict3.setdefault(key, [0, 0])
-        dict3[key][0] += value[0]
-        dict3[key][1] += value[1]
-
-    return dict3
-
-
-def train_pipeline(model, data_loader, loss_func, optimizer):
-    model.train()
-
-    for i, batch_data in enumerate(data_loader):
-        keypoints = batch_data['keypoints'].to(device)
-        labels = batch_data['label'].to(device)
-        keypoints = torch.autograd.Variable(keypoints)
-        labels = torch.autograd.Variable(labels)
-        out = model(keypoints)
-        loss = loss_func(out, labels)
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-
-    return loss
-
-
-def test_pipeline(model, data_loader, cls_names):
-    model.eval()
-    correct_dict = {}
-
-    for batch_data in tqdm(data_loader):
-        keypoints = batch_data['keypoints'].to(device)
-        labels = batch_data['label'].to(device)
-        keypoints = torch.autograd.Variable(keypoints)
-        labels = torch.autograd.Variable(labels)
-        out = model(keypoints)
-        _, predict = torch.max(out.data, 1)
-        temp_correct = count_correct(predict, labels, cls_names)
-        correct_dict = merge_batch_correct(correct_dict, temp_correct)
-
-    return correct_dict
+from gesture_lib.models import build_model
+from gesture_lib.datasets import build_dataset
+from gesture_lib.apis import train_pipeline, test_pipeline
 
 
 def parse_args():
@@ -101,7 +44,7 @@ def main():
         print("{}: {}".format(key, value))
 
     make_dirs(os.path.abspath(cfg.work_dir))
-    lstm_model = build_model(cfg.model).to(device)
+    lstm_model = build_model(cfg.model).cuda()
     print("\n------- model info -------:")
     print(lstm_model)
 
@@ -139,7 +82,7 @@ def main():
             log_info += " Epoch = {}/{}, lr = {:.6f}, train loss = {:.5f}".format(epoch+1, epochs, lr, loss.data)
             print(log_info)
 
-        if (epoch+1) % 100 == 0:
+        if (epoch+1) % 10 == 0:
             # test pipeline
             print("run test process ...")
 
