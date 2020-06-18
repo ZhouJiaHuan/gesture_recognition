@@ -1,8 +1,11 @@
 from gesture_lib.utils import box_iou
 from abc import abstractmethod
+from ..registry import MATCHERS
 
+
+@MATCHERS.register_module
 class BaseMatcher(object):
-    
+
     def __init__(self, alpha=0.5):
         super(BaseMatcher, self).__init__()
         self.alpha = alpha
@@ -45,6 +48,8 @@ class BaseMatcher(object):
         
         - keypoint_feature: feature extracted from color image with
             keypoint info. The type is decided by `extract_feature`
+
+        - visible: if the person is found in current frame
         '''
 
         sim = 0

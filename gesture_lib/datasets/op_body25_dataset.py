@@ -28,7 +28,7 @@ class OpBody25Dataset(BodyDataset):
             - gesture2_2.txt
             - ...
         - ...
-    
+
     each txt save a series of keypoints info (transformed) shaped (T, D), 
     where T is the series length and D is the feature dimention.
     '''

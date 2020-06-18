@@ -2,7 +2,6 @@
 import os
 import cv2
 import numpy as np
-import glob
 import pyrealsense2 as rs
 from tqdm import tqdm
 from abc import abstractmethod

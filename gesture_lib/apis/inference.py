@@ -3,17 +3,16 @@ import os
 import numpy as np
 from collections import Counter
 import cv2
-from abc import abstractmethod
 import torch
 
 from torch.nn.functional import softmax
 
 from mmcv import Config
 from gesture_lib.datasets import build_dataset, OpenposeExtractor, TrtposeExtractor
-from gesture_lib.models import build_model
-from gesture_lib.models import DlibMatcher, SurfMatcher
+from gesture_lib.models import build_model, build_matcher
 from gesture_lib.utils import box_iou
 from gesture_lib.ops.point_seq import *
+from gesture_lib.models import MemoryManager
 
 
 class Inference(object):
@@ -25,20 +24,12 @@ class Inference(object):
         3. is siamese suitable for tracking in this application?
     '''
 
-    def __init__(self,
-                 cfg_path,
-                 checkpoints,
-                 seq_len,
-                 op_model=None,
-                 model_pose='BODY_25',
-                 trt_model=None,
-                 pose_json_path=None,
-                 matcher='surf'):
+    def __init__(self, cfg_path, checkpoints, **kwargs):
         assert os.path.splitext(checkpoints)[-1] == '.pth'
-        assert matcher in ('dlib', 'surf')
-        
+
         cfg = Config.fromfile(cfg_path)
         print(dict(cfg))
+        infer_cfg = Config.fromfile("gesture_lib/apis/inference.yaml")
 
         # configure dataset
         data_cfg = cfg.dataset
@@ -48,33 +39,54 @@ class Inference(object):
         self.idx_list = self.dataset.idx_list
         self.transforms = self.dataset.transforms
 
-        # configure gesture estimation, gesture recognition,
-        # matcher and memory for tracking
-        self.width = 640
-        self.height = 480
-        self.pose_w = 224
-        self.pose_h = 224
+        # realsense frame size
+        self.width = infer_cfg.width
+        self.height = infer_cfg.height
+
+        # configure gesture estimation, gesture recognition
+        self.max_person_one_frame = infer_cfg.max_person_one_frame
         self.op_wrapper = None
-        self._configure_gesture_est(op_model, model_pose, trt_model, pose_json_path)
-        self._configure_gesture_rec(cfg.model, checkpoints, seq_len)
-        self._configure_matcher(matcher)
-        self._init_memory()
+        pose_params = infer_cfg.pose_params
+        self._configure_gesture_est(pose_params)
+        self.seq_len = infer_cfg.seq_len
+        self._configure_gesture_rec(cfg.model, checkpoints)
+
+        # cache for output (for smoothing the noise)
+        self.output_cache = {}
+        self.output_cache_params = infer_cfg.output_cache_params
+
+        # target info for single person tracking
+        self.target = {'person_id': '0', 'miss_times': 0, 'vote_prop': []}
+        self.target_params = infer_cfg.target_params
 
         # configure realsense camera
         self.rs_pipe = self.extractor.rs_pipe
         self.rs_cfg = self.extractor.rs_cfg
 
-    def _configure_gesture_est(self, op_model, model_pose, trt_model, pose_json_path):
-        if op_model is not None:
-            self.mode = "openpose"
+        # configure matcher and memory for tracking
+        matcher_params = infer_cfg.matcher_params
+        matcher_params.mode = infer_cfg.pose_params.mode
+        self.matcher = build_matcher(matcher_params)
+        self.memory_manager = MemoryManager(matcher=self.matcher)
+        self.sim_thr1 = self.memory_manager.sim_thr1
+        self.sim_thr2 = self.memory_manager.sim_thr2
+
+    def _configure_gesture_est(self, pose_params):
+        self.mode = pose_params['mode']
+        self.pose_w = pose_params.pose_w
+        self.pose_h = pose_params.pose_h
+        if self.mode == "openpose":
+            op_model = pose_params['op_model']
+            model_pose = pose_params['model_pose']
             self.extractor = OpenposeExtractor(op_model, model_pose)
             self.pose_wscale = self.width / self.pose_w
             self.pose_hscale = self.height / self.pose_h
             self.dim = 4  # (x, y, z, score)
             self.op_wrapper = self.extractor.op_wrapper
             self.datum = self.extractor.datum
-        elif trt_model is not None and pose_json_path is not None:
-            self.mode = "trtpose"
+        elif self.mode == "trtpose":
+            trt_model = pose_params['trt_model']
+            pose_json_path = pose_params['pose_json_path']
             self.extractor = TrtposeExtractor(trt_model,
                                               pose_json_path)
             self.pose_wscale = 1
@@ -86,7 +98,7 @@ class Inference(object):
         # result of current frame
         self.person_ids = []  # for tracking: [id, sim]
 
-    def _configure_gesture_rec(self, model_cfg, checkpoints, seq_len):
+    def _configure_gesture_rec(self, model_cfg, checkpoints):
         # result of current frame
         self.points_seq = {}  # input sequence for gesture model
         self.predict_result = {}  # gesture model output
@@ -96,36 +108,9 @@ class Inference(object):
         self.smooth_count = 0
 
         # configure model
-        self.seq_len = seq_len
         self.gesture_model = build_model(model_cfg).cuda()
         self.gesture_model.load_state_dict(torch.load(checkpoints))
         self.gesture_model.eval()
-
-    def _configure_matcher(self, matcher):
-        if matcher == 'dlib':
-            self.matcher = DlibMatcher(self.mode)
-        elif matcher == 'surf':
-            self.matcher = SurfMatcher(self.mode)
-        
-    def _init_memory(self):
-        # memory and cache
-        self.sim_thr1 = 0.2  # for memory
-        self.sim_thr2 = 0.8  # for memory cache
-        self.max_person_one_frame = 5  # maximum person in a frame
-        self.memory = {}  # memory info
-        self.memory_params = {'max_id': 100, 'capacity': 5}
-        self.memory_count = 0  # total person num memory recorded until now
-        self.memory_pop_id = 1  # person id for pop when capacity reached
-
-        self.memory_cache = []  # cache before saving to memory
-        self.memory_cache_count = 0  # visit times of cache (for clean)
-
-        self.output_cache = {}  # cache for output (for smoothing the noise)
-        self.output_cache_size = 20  # cache capacity (for clean)
-
-        # target info for single person tracking
-        self.target = {'person_id': '0', 'miss_times': 0, 'vote_prop': []}
-        self.target_params = {'max_miss_times': 30, 'vote_len': 5}
 
     def _get_aligned_frame(self, frames):
         return self.extractor._get_aligned_frame(frames)
@@ -256,7 +241,8 @@ class Inference(object):
         target_person = self.target['person_id']
         if target_person == '0':
             return result_img
-        target_box = self.memory[target_person]['keypoint_box']
+
+        target_box = self.memory_manager.memory[target_person]['keypoint_box']
         x1, y1, x2, y2 = np.int32(target_box)
         cv2.rectangle(result_img, (x1, y1), (x2, y2), color=(0, 0, 255),
                       thickness=4)
@@ -312,40 +298,6 @@ class Inference(object):
                 print("face angle: ", face_angle)
         return skeletons, cv_output
 
-    def _extract_feature(self, img_bgr, keypoint):
-        '''extract feature from color image with specified keypoint info.
-        '''
-        return self.matcher.extract_feature(img_bgr, keypoint)
-
-    def _person_sim(self, memory_info, input_info):
-        ''' compute the feature similarity based on memory and input_info
-
-        the memory_info and input_info are dicts, which at least contain
-        following infomation:
-        - keypoint: keypoint array, for trtpose, shape 18x2
-        - point: point array, for trtpose, shape 18x2
-        - keypoint_box: minimum bounding rectangle, (x1, y1, x2, y2)
-        - point_center: 3-D location (x, y, z)
-        - keypoint_feature: feature vector extracted from color image with
-            keypoint info. The type is decided by `_extract_feature`
-        '''
-        return self.matcher.match(memory_info, input_info)
-
-    def _find_best_match(self, input_info):
-        best_person_id = '0'
-        best_sim = 0
-
-        if self.memory_count == 0:
-            return best_person_id, best_sim
-
-        for person_id, memory_info in self.memory.items():
-            temp_sim = self._person_sim(memory_info, input_info)
-            if temp_sim > best_sim:
-                best_sim = temp_sim
-                best_person_id = person_id
-        return best_person_id, best_sim
-
-
     def _get_max_diou_skeleton(self, target_box, skeletons):
         diou_list = []
         for keypoint, _ in skeletons:
@@ -355,51 +307,10 @@ class Inference(object):
         idx = np.argmax(diou_list)
         return skeletons[idx]
 
-    def _reset_memory_state(self):
-        for person_id in self.memory.keys():
-            self.memory[person_id]['visible'] = False
-
-    def _reset_memory_info(self):
-        for person_id in self.memory.keys():
-            visible = self.memory[person_id]['visible']
-            if visible is False:
-                self.memory[person_id]['keypoint'] *= 0
-                self.memory[person_id]['point'] *= 0
-                self.memory[person_id]['keypoint_box'] = np.zeros(4)
-                self.memory[person_id]['point_center'] = np.zeros(3)
-
     def _reset_target(self):
         self.target['person_id'] = '0'
         self.target['miss_times'] = 0
         self.target['vote_prop'] = []
-
-    def _prepare_input_info(self, color_image, skeleton):
-        input_info = {}
-        keypoint, point = skeleton
-        keypoint_feature = self._extract_feature(color_image, keypoint)
-        point_center = get_location(point)
-        input_info['keypoint'] = keypoint
-        input_info['point'] = point
-        input_info['keypoint_box'] = get_keypoint_box(keypoint)
-        input_info['point_center'] = point_center
-        input_info['keypoint_feature'] = keypoint_feature
-        input_info['visible'] = True
-        return input_info
-
-    def _update_person_memory(self, person_id, input_info):
-        assert person_id in self.memory.keys()
-        self.memory[person_id]['keypoint'] = input_info['keypoint']
-        self.memory[person_id]['point'] = input_info['point']
-        self.memory[person_id]['keypoint_box'] = input_info['keypoint_box']
-        self.memory[person_id]['point_center'] = input_info['point_center']
-        self.memory[person_id]['visible'] = input_info['visible']
-
-    def _pop_memory_or_not(self):
-        capacity = self.memory_params['capacity']
-        if len(self.memory) >= capacity:
-            max_id = self.memory_params['max_id']
-            self.memory.pop(str(self.memory_pop_id), 0)
-            self.memory_pop_id = self.memory_pop_id % max_id + 1
 
     def _update_memory(self, color_image, skeletons):
         '''update memory info with current keypoints and points info
@@ -415,52 +326,32 @@ class Inference(object):
         '''
 
         self.person_ids = []
-        memory_person_ids = list(self.memory.keys())
-        self._reset_memory_state()
+        memory_person_ids = self.memory_manager.memory_ids()
+        self.memory_manager.reset_memory_state()
         for skeleton in skeletons:
-            input_info = self._prepare_input_info(color_image, skeleton)
-            best_person_id, best_sim = self._find_best_match(input_info)
+            input_info = self.memory_manager.prepare_input(color_image, skeleton)
+            best_person_id, best_sim = self.memory_manager.find_best_match(input_info)
 
             if best_sim > self.sim_thr1:
-                self._update_person_memory(best_person_id, input_info)
+                self.memory_manager.update_person_memory(best_person_id, input_info)
                 if self._update_output_cache(best_person_id):
                     self.person_ids.append([best_person_id, best_sim])
                     memory_person_ids.remove(best_person_id)
                 else:
                     self.person_ids.append(['0', 0])
             else:
-                if self._update_memory_cache(input_info):
-                    self._pop_memory_or_not()
-                    max_id = self.memory_params['max_id']
-                    person_id = str(self.memory_count % max_id + 1)
-                    self.memory[person_id] = input_info
+                if self.memory_manager.update_cache(input_info):
+                    self.memory_manager.pop_front_or_not()
+                    person_id = self.memory_manager.push_back(input_info)
                     self.person_ids.append([person_id, 1])
-                    self.memory_count += 1
                 else:
                     self.person_ids.append(['0', 0])
-        self._reset_memory_info()
+        self.memory_manager.reset_memory_info()
 
-    def _update_memory_cache(self, input_info, clean_num=20, pop_num=4):
-        self.memory_cache_count += 1
-        if self.memory_cache_count > clean_num:
-            self.memory_cache_count = 0
-            self.memory_cache = []
-
-        for idx, temp_info in enumerate(self.memory_cache):
-            temp_sim = self._person_sim(temp_info[0], input_info)
-            if temp_sim > self.sim_thr2:
-                self.memory_cache[idx][1] += 1
-                self.memory_cache[idx][0] = input_info
-                count = self.memory_cache[idx][1]
-                if count >= pop_num:
-                    self.memory_cache.pop(idx)
-                    return True
-
-        self.memory_cache.append([input_info, 1])
-        return False
-
-    def _update_output_cache(self, best_person_id, clean_num=20, pop_num=4):
-        if len(self.output_cache) > self.output_cache_size:
+    def _update_output_cache(self, best_person_id, pop_num=4):
+        capacity = self.output_cache_params['capacity']
+        pop_num = self.output_cache_params['pop_num']
+        if len(self.output_cache) > capacity:
             self.output_cache = {}
 
         if best_person_id not in self.output_cache.keys():
@@ -511,18 +402,18 @@ class Inference(object):
     def _single_track(self, color_image, skeletons):
         # print("in single track, target = ", self.target)
         self.person_ids = []
-        self._reset_memory_state()
+        self.memory_manager.reset_memory_state()
         target_person = self.target['person_id']
         if len(skeletons) > 0:
-            memory_info = self.memory[target_person]
+            memory_info = self.memory_manager.memory[target_person]
             target_box = memory_info['keypoint_box']
             prop_skeleton = self._get_max_diou_skeleton(target_box, skeletons)
-            input_info = self._prepare_input_info(color_image, prop_skeleton)
-            sim = self._person_sim(memory_info, input_info)
+            input_info = self.memory_manager.prepare_input(color_image, prop_skeleton)
+            sim = self.matcher.match(memory_info, input_info)
 
             if sim > self.sim_thr1:
                 # find track target
-                self._update_person_memory(target_person, input_info)
+                self.memory_manager.update_person_memory(target_person, input_info)
                 self.person_ids.append([target_person, sim])
                 self.target['miss_times'] = 0
             else:
@@ -535,7 +426,7 @@ class Inference(object):
                     return False
                 else:
                     return True
-            self._reset_memory_info()
+            self.memory_manager.reset_memory_info()
             self._update_points([prop_skeleton], self.person_ids)
             self._predict()
             trigger, score = self.predict_result[target_person]
@@ -552,7 +443,7 @@ class Inference(object):
             max_miss_times = self.target_params['max_miss_times']
             if self.target['miss_times'] >= max_miss_times:
                 # lose track target
-                self._reset_memory_info()
+                self.memory_manager.reset_memory_info()
                 self._reset_target()
                 return False
             else:

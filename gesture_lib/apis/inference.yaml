@@ -1,0 +1,33 @@
+# realsense frame size
+width: 640
+height: 480
+
+max_person_one_frame: 5
+
+seq_len: 30
+
+# params for pose estimation
+pose_params:
+    pose_w: 224
+    pose_h: 224
+    # change to `openpose` when using openpose data for gesture model,
+    # `trtpose` is recommended for faster speed
+    mode: "trtpose" 
+    op_model: "checkpoints/openpose"
+    model_pose: 'BODY_25'
+    trt_model: "checkpoints/trtpose/densenet121_trt.pth"
+    pose_json_path: "gesture_lib/data/human_pose.json"
+
+output_cache_params:
+    capacity: 20
+    pop_num: 4
+
+target_params:
+    max_miss_times: 20
+    vote_len: 10
+
+matcher_params:
+    # change to `SurfMatcher` when using Surf feature for matching
+    # `DlibMatcher` is recommended for better matching accuracy
+    type: DlibMatcher 
+    alpha: 0.5

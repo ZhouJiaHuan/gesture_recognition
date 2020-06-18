@@ -57,7 +57,7 @@ class OpenposeExtractor(BodyExtractor):
         '''get the body keypoints with maximum score in one frame
 
         for keypoints extraction
-        
+
         Args:
             keypoints: [ndarray], shape (N, point_num, 3)
 
