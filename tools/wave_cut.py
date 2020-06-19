@@ -1,12 +1,12 @@
 # crop the gesture of hello
 
-import numpy as np 
+import numpy as np
 import matplotlib.pyplot as plt
 import os
 import glob
 import sys
 sys.path.append(".")
-from gesture_lib.utils import make_dirs
+from gesture_lib.ops import make_dirs
 
 
 def smooth_filter(vector):

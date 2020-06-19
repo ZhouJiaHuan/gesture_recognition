@@ -31,9 +31,7 @@ def main():
         print("invalid .pth checkpoint file!")
         raise
 
-    camera_infer = Inference(cfg_path=cfg_path,
-                             checkpoints=ckp,
-                             )
+    camera_infer = Inference(cfg_path=cfg_path, checkpoints=ckp)
     camera_infer.run(show=args.show)
 
 

@@ -1,5 +1,5 @@
 import numpy as np
-from gesture_lib.ops.point_seq import get_location, get_keypoint_box
+from gesture_lib.ops import get_location, get_keypoint_box
 
 
 class MemoryManager(object):
@@ -30,21 +30,20 @@ class MemoryManager(object):
         - keypoint_feature: feature extracted from color image with
             keypoint info. The type is decided by `extract_feature`
     '''
-    def __init__(self, matcher, capacity=5, max_id=100, mode='trtpose',
-                 clean_times=20, pop_num=4):
+    def __init__(self, matcher, capacity=5, max_id=100, clean_times=20,
+                 pop_num=4, sim_thr1=0.2, sim_thr2=0.8):
         self.matcher = matcher
         self.capacity = capacity
         self.max_id = max_id
         self.clean_times = clean_times
-        self.pop_num = 4
+        self.pop_num = pop_num
         self.memory = {}
         self.cache = []
         self.memory_count = 0
         self.memory_pop_id = 1
         self.cache_count = 0
-        self.mode = mode
-        self.sim_thr1 = 0.2  # for memory
-        self.sim_thr2 = 0.8  # for memory cache
+        self.sim_thr1 = sim_thr1  # for memory
+        self.sim_thr2 = sim_thr2  # for memory cache
 
     def memory_ids(self):
         return list(self.memory.keys())

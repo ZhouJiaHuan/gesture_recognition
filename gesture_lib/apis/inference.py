@@ -10,8 +10,7 @@ from torch.nn.functional import softmax
 from mmcv import Config
 from gesture_lib.datasets import build_dataset, OpenposeExtractor, TrtposeExtractor
 from gesture_lib.models import build_model, build_matcher
-from gesture_lib.utils import box_iou
-from gesture_lib.ops.point_seq import *
+from gesture_lib.ops import *
 from gesture_lib.models import MemoryManager
 
 
@@ -24,7 +23,7 @@ class Inference(object):
         3. is siamese suitable for tracking in this application?
     '''
 
-    def __init__(self, cfg_path, checkpoints, **kwargs):
+    def __init__(self, cfg_path, checkpoints):
         assert os.path.splitext(checkpoints)[-1] == '.pth'
 
         cfg = Config.fromfile(cfg_path)
@@ -43,12 +42,15 @@ class Inference(object):
         self.width = infer_cfg.width
         self.height = infer_cfg.height
 
-        # configure gesture estimation, gesture recognition
+        # configure pose estimation
         self.max_person_one_frame = infer_cfg.max_person_one_frame
         self.op_wrapper = None
         pose_params = infer_cfg.pose_params
         self._configure_gesture_est(pose_params)
-        self.seq_len = infer_cfg.seq_len
+
+        # configure gesture recognition
+        self.seq_len = infer_cfg.gesture_params.seq_len
+        self.score_thr = infer_cfg.gesture_params.score_thr
         self._configure_gesture_rec(cfg.model, checkpoints)
 
         # cache for output (for smoothing the noise)
@@ -67,9 +69,11 @@ class Inference(object):
         matcher_params = infer_cfg.matcher_params
         matcher_params.mode = infer_cfg.pose_params.mode
         self.matcher = build_matcher(matcher_params)
-        self.memory_manager = MemoryManager(matcher=self.matcher)
-        self.sim_thr1 = self.memory_manager.sim_thr1
-        self.sim_thr2 = self.memory_manager.sim_thr2
+        memory_params = infer_cfg.memory_params
+        memory_params.matcher = self.matcher
+        self.memory_manager = MemoryManager(**memory_params)
+        self.sim_thr1 = memory_params.sim_thr1
+        self.sim_thr2 = memory_params.sim_thr2
 
     def _configure_gesture_est(self, pose_params):
         self.mode = pose_params['mode']
@@ -166,7 +170,7 @@ class Inference(object):
 
         idx = np.argmax(predict)
         score = float(predict[idx])
-        if score > 0.7:
+        if score > self.score_thr:
             predict_label = self.cls_names[idx]
             flag = self._post_process(point_array, predict_label)
             predict_label = predict_label if flag is True else "others"
@@ -431,10 +435,10 @@ class Inference(object):
             self._predict()
             trigger, score = self.predict_result[target_person]
             trigger = self._update_target_vote_prop(trigger)
-            if trigger == 'come' and score > 0.8:
+            if trigger == 'come' and score > self.score_thr:
                 print("come: service state.")
                 return True
-            if trigger == 'wave' and score > 0.8:
+            if trigger == 'wave' and score > self.score_thr:
                 self._reset_target()
                 print("wave: service canceled.")
                 return False
@@ -473,7 +477,7 @@ class Inference(object):
                 continue
             color_image = np.asanyarray(color_frame.get_data())
             time_s = time.time()
-            skeletons, cv_output = self._detect_frame(color_image, depth_frame)
+            skeletons, _ = self._detect_frame(color_image, depth_frame)
             target_person = self.target['person_id']
             if target_person == '0':
                 self._multi_track(color_image, skeletons)
@@ -481,7 +485,7 @@ class Inference(object):
                 self._single_track(color_image, skeletons)
             time_e = time.time()
             if show is True:
-                cv_output = self._draw_person_ids(cv_output, skeletons)
+                cv_output = self._draw_person_ids(color_image, skeletons)
                 cv_output = self._draw_fps(cv_output, time_e-time_s)
                 cv_output = self._draw_target(cv_output)
                 cv2.imshow("gesture output", cv_output[:, :, ::-1])

@@ -8,7 +8,7 @@ import glob
 from tqdm import tqdm
 import sys
 sys.path.append(".")
-from gesture_lib.utils import make_dirs
+from gesture_lib.ops import make_dirs
 from gesture_lib.dataset.transforms import BodyZeroInterpolation
 
 def smooth_filter(vector):

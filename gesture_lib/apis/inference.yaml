@@ -4,8 +4,6 @@ height: 480
 
 max_person_one_frame: 5
 
-seq_len: 30
-
 # params for pose estimation
 pose_params:
     pose_w: 224
@@ -18,16 +16,34 @@ pose_params:
     trt_model: "checkpoints/trtpose/densenet121_trt.pth"
     pose_json_path: "gesture_lib/data/human_pose.json"
 
+
+# params for gesture recognition
+gesture_params:
+    seq_len: 30
+    score_thr: 0.7
+
+# params for person id output cache
 output_cache_params:
     capacity: 20
     pop_num: 4
 
+# params for target person
 target_params:
     max_miss_times: 20
     vote_len: 10
 
+# params for matching in tracking process
 matcher_params:
     # change to `SurfMatcher` when using Surf feature for matching
     # `DlibMatcher` is recommended for better matching accuracy
     type: DlibMatcher 
     alpha: 0.5
+
+# params for memory management
+memory_params:
+    capacity: 5
+    max_id: 100
+    clean_times: 20
+    pop_num: 4
+    sim_thr1: 0.2
+    sim_thr2: 0.8

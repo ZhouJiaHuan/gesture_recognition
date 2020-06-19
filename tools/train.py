@@ -14,7 +14,7 @@ from torch.utils.data import DataLoader
 from torch.optim import lr_scheduler
 from tensorboardX import SummaryWriter
 from mmcv import Config
-from gesture_lib.utils import make_dirs
+from gesture_lib.ops import make_dirs
 from gesture_lib.models import build_model
 from gesture_lib.datasets import build_dataset
 from gesture_lib.apis import train_pipeline, test_pipeline
@@ -82,7 +82,7 @@ def main():
             log_info += " Epoch = {}/{}, lr = {:.6f}, train loss = {:.5f}".format(epoch+1, epochs, lr, loss.data)
             print(log_info)
 
-        if (epoch+1) % 10 == 0:
+        if (epoch+1) % 100 == 0:
             # test pipeline
             print("run test process ...")
 
