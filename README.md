@@ -2,7 +2,7 @@ This repository realize the simple gestures recognition based on skeletons infor
 
 - get a sequence of frames from the depth camera (eg., realsense), including the color frame and depth frame
 - extract the skeletons informations with `openpose body-25` model or `trt-pose body-18` model.
-- track person with specified feature. using features extracted with `SURF` for higher speed and features extracted with dlib face module for higher accuracy 
+- track person with specified feature and DIoU. using features extracted with `SURF` for higher speed and features extracted with dlib face module for higher accuracy.
 - parse the 3-d location of the 25 body key points from realsense camera
 - predict the gestures from fixed length of frames (eg., 30 frames) with LSTM model
 
@@ -13,6 +13,7 @@ This repository realize the simple gestures recognition based on skeletons infor
 - PyTorch 1.4 (with torchvision)
 - openpose library
 - realsense library
+- Dlib library 
 - TensorRT: https://github.com/NVIDIA/TensorRT
 - torch2trt: https://github.com/NVIDIA-AI-IOT/torch2trt
 - trt-pose: https://github.com/NVIDIA-AI-IOT/trt_pose
@@ -29,7 +30,7 @@ For LSTM training, body key points information are extracted from the color imag
 
 We use the `openpose body-25` model (**higher accuracy**) and `trt-pose body-18` model (**higher speed**) for human pose estimation.
 
-The model for gesture recognition is a `LSTM` model,  which generally includes 2 LSTM layers and 1 fully connected layer with the SoftMax for classification, see `models/lstm.py` for more details.
+The model for gesture recognition is a `LSTM` structure,  which generally includes 2 or 3 LSTM layers and 1 fully connected layer with the SoftMax for classification.  We also add the attention strategy to LSTM in our experiments. See `models/lstm.py` and `models/lstm_attention.py`for more details about the model.
 
 # Train
 
@@ -39,16 +40,14 @@ For training the model, just run:
 python tools/train.py CONFIGURE_FILE
 ```
 
-the configure file is specified by `.yaml` file, see example in `configs/lstm_op-body25.yaml` and `configs/lstm_trt-body18.yaml`  for more details.
+the configure file is specified by a `.yaml` file, see example in `configs/lstm_op-body25.yaml` and `configs/lstm_trt-body18.yaml`  for more details.
 
 # Inference
 
 For the inference with realsense camera, run:
 
 ```
-python tools/camera_inference.py CONFIG CHECKPOINT --op_model OP_MODEL] 
-       --trt_model TRT_MODEL --trt_json TRT_JSON --extractor EXTRACTOR 
-       --seq_len SEQ_LEN --show                    
+python tools/camera_inference.py CONFIG CHECKPOINT --show                    
 ```
 
-For specified example, see `inference_surf_op.sh` and `camera_inference_surf_trt.sh`.
+For specified example, see `inference_trt.sh`  for inference with the `trt-pose`. If you want to using `openpose` or modify other configures, please refer to `apis/inference.yaml` 
