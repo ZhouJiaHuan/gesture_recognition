@@ -6,6 +6,11 @@ This repository realize the simple gestures recognition based on skeletons infor
 - parse the 3-d location of the 25 body key points from realsense camera
 - predict the gestures from fixed length of frames (eg., 30 frames) with LSTM model
 
+The processed dataset for training and models for face recognition and pose estimation can be downloaded from here:
+
+LINK：https://pan.baidu.com/s/1_6hoD4pP1g5nIyQfhe1xig 
+PASSWORD: bezc
+
 # Dependence
 
 - python 3.6
