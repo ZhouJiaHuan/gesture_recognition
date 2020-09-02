@@ -8,13 +8,14 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 
 from gesture_lib.models.losses import FocalLoss
-from ..registry import MODELS
+# from ..registry import MODELS
+from gesture_lib.registry import MODELS
 
 loss_dict = {"CELoss": nn.CrossEntropyLoss(),
              "FocalLoss": FocalLoss(4)}
 
 
-@MODELS.register_module
+@MODELS.register_module(name="LSTM_ATTENTION")
 class LSTM_ATTENTION(nn.Module):
 
     def __init__(self,

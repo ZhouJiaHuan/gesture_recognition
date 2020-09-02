@@ -1,5 +1,5 @@
-from mmcv.utils import build_from_cfg
-from .registry import MODELS, MATCHERS
+from gesture_lib.ops.registry import build_from_cfg
+from gesture_lib.registry import MODELS, MATCHERS
 
 
 def build_model(model_cfg, default_args=None):

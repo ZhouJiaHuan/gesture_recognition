@@ -8,12 +8,12 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 from torchvision.transforms import Compose
-from .registry import DATASET
+from gesture_lib.registry import DATASET
 from .body_dataset import BodyDataset
 from .transforms import *
 
 
-@DATASET.register_module
+@DATASET.register_module(name="OpBody25Dataset")
 class OpBody25Dataset(BodyDataset):
     '''
     data tree:

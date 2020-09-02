@@ -4,10 +4,10 @@
 
 import numpy as np
 from .body_dataset import BodyDataset
-from .registry import DATASET
+from gesture_lib.registry import DATASET
 
 
-@DATASET.register_module
+@DATASET.register_module(name="TrtBody18Dataset")
 class TrtBody18Dataset(BodyDataset):
     '''
 

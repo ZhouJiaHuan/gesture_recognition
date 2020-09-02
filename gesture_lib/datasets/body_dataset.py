@@ -9,11 +9,11 @@ import torch
 from torch.utils.data import Dataset
 
 from abc import abstractmethod
-from .registry import DATASET
+from gesture_lib.registry import DATASET
 from .transforms import Compose
 
 
-@DATASET.register_module
+@DATASET.register_module(name="BodyDataset")
 class BodyDataset(Dataset):
     '''
     data tree:

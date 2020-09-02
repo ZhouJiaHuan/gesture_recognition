@@ -1,10 +1,10 @@
 import numpy as np
 import random
 
-from ..registry import PIPELINES
+from gesture_lib.registry import PIPELINES
 
 
-@PIPELINES.register_module
+@PIPELINES.register_module(name="BodyNormalize")
 class BodyNormalize(object):
     '''normalize the body keypoints
     '''
@@ -35,7 +35,7 @@ class BodyNormalize(object):
         return result_array
 
 
-@PIPELINES.register_module
+@PIPELINES.register_module(name="BodyCoordTransform")
 class BodyCoordTransform(object):
     '''transform the coordinate
     '''
@@ -56,7 +56,7 @@ class BodyCoordTransform(object):
         return result_array
 
 
-@PIPELINES.register_module
+@PIPELINES.register_module(name="BodyInterpolation")
 class BodyInterpolation(object):
     '''interpolate the points array when array length < min_n
     '''
@@ -80,7 +80,7 @@ class BodyInterpolation(object):
         return result_array
 
 
-@PIPELINES.register_module
+@PIPELINES.register_module(name="BodyZeroInterpolation")
 class BodyZeroInterpolation(object):
     '''interpolate the location where the points value is zero.
     '''
@@ -106,7 +106,7 @@ class BodyZeroInterpolation(object):
         return result_array
 
 
-@PIPELINES.register_module
+@PIPELINES.register_module(name="BodyRandomToZero")
 class BodyRandomToZero(object):
     ''' randomly set the points to zero
     '''
@@ -134,7 +134,7 @@ class BodyRandomToZero(object):
         return result_array
 
 
-@PIPELINES.register_module
+@PIPELINES.register_module(name="BodyOutlierToZero")
 class BodyOutlierToZero(object):
     '''detect and set the outlier points to zero.
     '''
@@ -161,7 +161,7 @@ class BodyOutlierToZero(object):
         return result_array
 
 
-@PIPELINES.register_module
+@PIPELINES.register_module(name="BodyRandomCropFixLen")
 class BodyRandomCropFixLen(object):
     '''randomly crop the points array
     '''
@@ -180,7 +180,7 @@ class BodyRandomCropFixLen(object):
         return result_array
 
 
-@PIPELINES.register_module
+@PIPELINES.register_module(name="BodyRandomCropVariable")
 class BodyRandomCropVariable(object):
     '''randomly crop the points array
     '''
@@ -201,7 +201,7 @@ class BodyRandomCropVariable(object):
         return result_array
 
 
-@PIPELINES.register_module
+@PIPELINES.register_module(name="BodyRandomSample")
 class BodyRandomSample(object):
     '''randomly sample the points array
     '''
@@ -218,7 +218,7 @@ class BodyRandomSample(object):
         return result_array
 
 
-@PIPELINES.register_module
+@PIPELINES.register_module(name="BodyGaussianNoise")
 class BodyGaussianNoise(object):
     '''add gaussian noise to the points info
     '''
@@ -233,7 +233,7 @@ class BodyGaussianNoise(object):
         return result_array
 
 
-@PIPELINES.register_module
+@PIPELINES.register_module(name="BodyExpSmooth")
 class BodyExpSmooth(object):
     '''smooth the points array with exponential smooth method
     '''
@@ -253,7 +253,7 @@ class BodyExpSmooth(object):
         return result_array
 
 
-@PIPELINES.register_module
+@PIPELINES.register_module(name="BodyResize")
 class BodyResize(object):
     '''resize the points array to fixed length
     '''

@@ -1,9 +1,9 @@
 from gesture_lib.ops import box_iou
 from abc import abstractmethod
-from ..registry import MATCHERS
+from gesture_lib.registry import MATCHERS
 
 
-@MATCHERS.register_module
+@MATCHERS.register_module(name="BaseMatcher")
 class BaseMatcher(object):
 
     def __init__(self, alpha=0.5):

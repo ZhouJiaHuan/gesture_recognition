@@ -1,10 +1,10 @@
 import collections
 
-from mmcv.utils import build_from_cfg
-from ..registry import PIPELINES
+from gesture_lib.ops.registry import build_from_cfg
+from gesture_lib.registry import PIPELINES
 
 
-@PIPELINES.register_module()
+@PIPELINES.register_module(name="Compose")
 class Compose(object):
 
     def __init__(self, transforms):

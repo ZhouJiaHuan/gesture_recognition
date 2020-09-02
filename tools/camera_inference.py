@@ -21,15 +21,12 @@ def main():
     args = parse_args()
     cfg_path = args.config
     ckp = args.checkpoint
-    if cfg_path is None or ckp is None:
-        print("configure path and checkpoint must be specified!")
-        raise
     if cfg_path.split('.')[-1] != 'yaml':
         print("invalid .yaml configure file!")
-        raise
+        exit(0)
     if ckp.split('.')[-1] != 'pth':
         print("invalid .pth checkpoint file!")
-        raise
+        exit(0)
 
     camera_infer = Inference(cfg_path=cfg_path, checkpoints=ckp)
     camera_infer.run(show=args.show)

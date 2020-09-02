@@ -1,7 +1,5 @@
-# import sys
-# sys.path.append(".")
-from mmcv.utils import build_from_cfg
-from .registry import DATASET
+from gesture_lib.registry import DATASET
+from gesture_lib.ops.registry import build_from_cfg
 
 
 def build_dataset(data_cfg, default_args=None):

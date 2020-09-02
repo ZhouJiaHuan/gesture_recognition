@@ -1,4 +1,3 @@
-import cv2
 import numpy as np
 import pyopenpose as op
 from .body_extractor import BodyExtractor

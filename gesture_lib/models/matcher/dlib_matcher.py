@@ -3,10 +3,10 @@ import cv2
 import dlib
 from gesture_lib.ops import face_feature, euclidean_dis
 from .base_matcher import BaseMatcher
-from ..registry import MATCHERS
+from gesture_lib.registry import MATCHERS
 
 
-@MATCHERS.register_module
+@MATCHERS.register_module(name="DlibMatcher")
 class DlibMatcher(BaseMatcher):
     '''Matcher with Dlib face apis
     '''

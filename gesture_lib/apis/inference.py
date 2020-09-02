@@ -7,10 +7,11 @@ import torch
 
 from torch.nn.functional import softmax
 
-from mmcv import Config
+# from easydict import EasyDict as edict
 from gesture_lib.datasets import build_dataset, OpenposeExtractor, TrtposeExtractor
 from gesture_lib.models import build_model, build_matcher
 from gesture_lib.ops import *
+from gesture_lib.ops.yaml_utils import parse_yaml
 from gesture_lib.models import MemoryManager
 
 
@@ -26,9 +27,9 @@ class Inference(object):
     def __init__(self, cfg_path, checkpoints):
         assert os.path.splitext(checkpoints)[-1] == '.pth'
 
-        cfg = Config.fromfile(cfg_path)
+        cfg = parse_yaml(cfg_path)
         print(dict(cfg))
-        infer_cfg = Config.fromfile("gesture_lib/apis/inference.yaml")
+        infer_cfg = parse_yaml("gesture_lib/apis/inference.yaml")
 
         # configure dataset
         data_cfg = cfg.dataset

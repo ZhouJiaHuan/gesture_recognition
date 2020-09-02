@@ -2,18 +2,15 @@
 # Author: ZhouJH
 # Data: 2020/4/8
 
-import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from torch.autograd import Variable
 from gesture_lib.models.losses import FocalLoss
-from ..registry import MODELS
+from gesture_lib.registry import MODELS
 
 loss_dict = {"CELoss": nn.CrossEntropyLoss(),
              "FocalLoss": FocalLoss(4)}
 
 
-@MODELS.register_module
+@MODELS.register_module(name="LSTM")
 class LSTM(nn.Module):
     '''
     model structure:

@@ -1,10 +1,10 @@
 import numpy as np
 import cv2
 from .base_matcher import BaseMatcher
-from ..registry import MATCHERS
+from gesture_lib.registry import MATCHERS
 
 
-@MATCHERS.register_module
+@MATCHERS.register_module(name="SurfMatcher")
 class SurfMatcher(BaseMatcher):
 
     def __init__(self, mode="trtpose", belta=0.5, **kwargs):
