@@ -98,7 +98,7 @@ class Inference(object):
             self.pose_hscale = 1
             self.dim = 3  # (x, y, z)
         else:
-            raise
+            exit(0)
 
         # result of current frame
         self.person_ids = []  # for tracking: [id, sim]
