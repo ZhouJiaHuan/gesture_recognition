@@ -2,7 +2,11 @@ import time
 import numpy as np
 import cv2
 
-from gesture_lib.datasets import build_dataset, OpenposeExtractor, TrtposeExtractor
+from gesture_lib.datasets import TrtposeExtractor
+try:
+    from gesture_lib.datasets import OpenposeExtractor
+except Exception:
+    print("openpose library not found!")
 from gesture_lib.models import build_model, build_matcher
 from gesture_lib.ops.keypoint import *
 from gesture_lib.ops.io import *
