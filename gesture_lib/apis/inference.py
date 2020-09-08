@@ -7,8 +7,12 @@ import torch
 
 from torch.nn.functional import softmax
 
-# from easydict import EasyDict as edict
-from gesture_lib.datasets import build_dataset, OpenposeExtractor, TrtposeExtractor
+from gesture_lib.datasets import build_dataset
+from gesture_lib.datasets import TrtposeExtractor
+try:
+    from gesture_lib.datasets import OpenposeExtractor
+except Exception:
+    print("openpose library not found!")
 from gesture_lib.models import build_model, build_matcher
 from gesture_lib.ops import *
 from gesture_lib.ops.yaml_utils import parse_yaml
