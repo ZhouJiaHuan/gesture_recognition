@@ -7,12 +7,9 @@ try:
     from gesture_lib.datasets import OpenposeExtractor
 except Exception:
     print("openpose library not found!")
-from gesture_lib.models import build_model, build_matcher
-from gesture_lib.ops.keypoint import *
-from gesture_lib.ops.io import *
+
 from gesture_lib.ops.fisheye import RsFishEye
 from gesture_lib.ops.yaml_utils import parse_yaml
-from gesture_lib.models import MemoryManager
 
 
 class InferenceFisheye(object):
@@ -97,8 +94,6 @@ class InferenceFisheye(object):
                     frame = self.fisheye.next_frame()
                     time_s = time.time()
                     color_image = self.fisheye.get_color_img(frame, camera)
-
-                    # print(color_image.shape)
                     color_image = cv2.cvtColor(color_image, cv2.COLOR_GRAY2RGB)
                     keypoints, cv_output = self._body_keypoints(color_image)
                     time_e = time.time()
@@ -107,4 +102,4 @@ class InferenceFisheye(object):
                         cv2.imshow("detect result", cv_output)
                         cv2.waitKey(1)
         finally:
-            self.fisheye.close_rs_pipe()    
+            self.fisheye.close_rs_pipe()

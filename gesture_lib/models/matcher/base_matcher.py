@@ -1,4 +1,4 @@
-from gesture_lib.ops import box_iou
+from gesture_lib.ops.box import box_iou
 from abc import abstractmethod
 from gesture_lib.registry import MATCHERS
 

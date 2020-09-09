@@ -6,7 +6,7 @@ import os
 import glob
 import sys
 sys.path.append(".")
-from gesture_lib.ops import make_dirs
+from gesture_lib.ops.io import make_dirs
 
 
 def smooth_filter(vector):

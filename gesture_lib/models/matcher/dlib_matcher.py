@@ -1,7 +1,7 @@
 import numpy as np
 import cv2
 import dlib
-from gesture_lib.ops import face_feature, euclidean_dis
+from gesture_lib.ops.dlib_face import face_feature, euclidean_dis
 from .base_matcher import BaseMatcher
 from gesture_lib.registry import MATCHERS
 

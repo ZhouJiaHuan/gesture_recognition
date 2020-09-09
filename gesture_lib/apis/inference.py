@@ -14,9 +14,10 @@ try:
 except Exception:
     print("openpose library not found!")
 from gesture_lib.models import build_model, build_matcher
-from gesture_lib.ops import *
+from gesture_lib.ops.box import box_iou
 from gesture_lib.ops.yaml_utils import parse_yaml
 from gesture_lib.models import MemoryManager
+import gesture_lib.ops.keypoint as K
 
 
 class Inference(object):
@@ -152,18 +153,18 @@ class Inference(object):
 
     def _post_process(self, points_array, label):
         if label == "wave":
-            return post_process_wave(points_array, self.mode)
+            return K.post_process_wave(points_array, self.mode)
         elif label == "come":
-            return post_process_come(points_array, self.mode)
+            return K.post_process_come(points_array, self.mode)
         elif label == "hello":
-            return post_process_hello(points_array, self.mode)
+            return K.post_process_hello(points_array, self.mode)
         else:
             return True
 
     def _predict_one_point(self, person_id, point_array):
         predict_label = "others"
         score = 0.0
-        if is_static(point_array):
+        if K.is_static(point_array):
             print('static state')
             return predict_label, score
         point_tensor = self.transforms(point_array)
@@ -287,7 +288,7 @@ class Inference(object):
     def _detect_frame(self, color_image, depth_frame):
         src_keypoints, cv_output = self._body_keypoints(color_image)
         frame_center = [self.width/2, self.height/2]
-        src_keypoints = sort_keypoints(src_keypoints, frame_center)
+        src_keypoints = K.sort_keypoints(src_keypoints, frame_center)
 
         person_num = min(src_keypoints.shape[0], self.max_person_one_frame)
 
@@ -295,8 +296,8 @@ class Inference(object):
         for i in range(person_num):
             temp_keypoint = src_keypoints[i, :, :]
             temp_point = self._keypoint_to_point(temp_keypoint, depth_frame)
-            face_angle = get_face_angle(temp_point, self.mode)
-            body_angle = get_body_angle(temp_point, self.mode)
+            face_angle = K.get_face_angle(temp_point, self.mode)
+            body_angle = K.get_body_angle(temp_point, self.mode)
             valid_body = self._is_valid_body_angle(body_angle)
             valid_face = self._is_valid_face_angle(face_angle)
             if valid_body or valid_face:
@@ -310,7 +311,7 @@ class Inference(object):
     def _get_max_diou_skeleton(self, target_box, skeletons):
         diou_list = []
         for keypoint, _ in skeletons:
-            current_box = get_keypoint_box(keypoint)
+            current_box = K.get_keypoint_box(keypoint)
             current_diou = box_iou(target_box, current_box)
             diou_list.append(current_diou)
         idx = np.argmax(diou_list)

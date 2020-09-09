@@ -1,5 +1,5 @@
 import numpy as np
-from gesture_lib.ops import get_location, get_keypoint_box
+from gesture_lib.ops.keypoint import get_location, get_keypoint_box
 
 
 class MemoryManager(object):

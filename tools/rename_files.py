@@ -1,4 +1,4 @@
-from gesture_lib.ops import get_file_path
+from gesture_lib.ops.io import get_file_path
 import os
 
 

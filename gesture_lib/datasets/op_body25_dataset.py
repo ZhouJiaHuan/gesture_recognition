@@ -2,15 +2,9 @@
 # Author: ZhouJH
 # Data: 2020/4/8
 
-import os
-import glob
 import numpy as np
-import torch
-from torch.utils.data import Dataset
-from torchvision.transforms import Compose
 from gesture_lib.registry import DATASET
 from .body_dataset import BodyDataset
-from .transforms import *
 
 
 @DATASET.register_module(name="OpBody25Dataset")

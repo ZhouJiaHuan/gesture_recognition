@@ -9,12 +9,14 @@ import torch
 import time
 import argparse
 import sys
-sys.path.append(".")
+
 from torch.utils.data import DataLoader
 from torch.optim import lr_scheduler
 from tensorboardX import SummaryWriter
-from mmcv import Config
-from gesture_lib.ops import make_dirs
+
+sys.path.append(".")
+from gesture_lib.ops.io import make_dirs
+from gesture_lib.ops.yaml_utils import parse_yaml
 from gesture_lib.models import build_model
 from gesture_lib.datasets import build_dataset
 from gesture_lib.apis import train_pipeline, test_pipeline
@@ -35,8 +37,7 @@ def parse_args():
 
 def main():
     args = parse_args()
-
-    cfg = Config.fromfile(args.config)
+    cfg = parse_yaml(args.config)
     if args.work_dir is not None:
         cfg.work_dir = args.work_dir
     print("\n------- configure info -------:")

@@ -8,8 +8,9 @@ import glob
 from tqdm import tqdm
 import sys
 sys.path.append(".")
-from gesture_lib.ops import make_dirs
+from gesture_lib.ops.io import make_dirs
 from gesture_lib.dataset.transforms import BodyZeroInterpolation
+
 
 def smooth_filter(vector):
     L = vector.shape[0]
@@ -17,6 +18,7 @@ def smooth_filter(vector):
     for i in range(1, L-1):
         vector_filtered[i] = 0.5*vector[i] + 0.25*vector[i-1] + 0.25*vector[i+1]
     return vector_filtered
+
 
 def trunc_vector(vector):
     vector_trunc = vector.copy()
@@ -62,6 +64,7 @@ def arg_relmaxmin(vector, ignore_s=60, ignore_e=60, min_gap=40):
 
     return rel_min, rel_max
 
+
 def split_points(points, rel_min, rel_max, txt_dir):
     min_array = np.array(rel_min)
     max_array = np.array(rel_max)
@@ -86,6 +89,7 @@ def split_points(points, rel_min, rel_max, txt_dir):
             txt_path = os.path.join(txt_dir, txt_name)
             np.savetxt(txt_path, temp_array, fmt='%.5f')
 
+
 def split(txt_dir, out_dir, col, ext='op-25.txt'):
     txt_path_list = glob.glob(os.path.join(txt_dir, '*'+ext))
     for txt_path in tqdm(txt_path_list):
@@ -107,8 +111,8 @@ def split(txt_dir, out_dir, col, ext='op-25.txt'):
         plt.grid()
         plt.savefig(os.path.join(sub_dir, 'vector.jpg'))
         split_points(points, rel_min, rel_max, sub_dir)
-        
- 
+
+
 if __name__ == "__main__":
     come_dir = "/home/zhoujh/Data/gesture_recognition/bag_files/come"
     out_dir = "/home/zhoujh/Data/gesture_recognition/bag_files/come_out"
