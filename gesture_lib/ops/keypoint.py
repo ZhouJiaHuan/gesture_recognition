@@ -37,7 +37,7 @@ def post_process_wave(points_array, mode='openpose'):
         rwrist_z = points_array[:, 8]
         relbow_y = points_array[:, 4]
     else:
-        raise
+        raise KeyError
     rwrist_x = rwrist_x[rwrist_x != 0]
     rwrist_y = rwrist_y[rwrist_y != 0]
     rwrist_z = rwrist_z[rwrist_z != 0]
@@ -88,7 +88,7 @@ def post_process_come(points_array, mode='openpose'):
         relbow_y = points_array[:, 4]
         rshoulder_y = points_array[:, 1]
     else:
-        raise
+        raise KeyError
 
     rwrist_x = rwrist_x[rwrist_x != 0]
     rwrist_y = rwrist_y[rwrist_y != 0]
@@ -134,7 +134,7 @@ def post_process_hello(points_array, mode='openpose'):
         rwrist_y = points_array[:, 7]
         neck_y = points_array[:, 10]
     else:
-        raise
+        raise KeyError
 
     rwrist_y = rwrist_y[rwrist_y != 0]
     neck_y = neck_y[neck_y != 0]
@@ -186,7 +186,7 @@ def get_face_angle(point, mode='openpose'):
         r_eye = point[2, :]
         l_eye = point[1, :]
     else:
-        raise
+        raise KeyError
 
     if nose[-1] * r_eye[-1] * l_eye[-1] == 0:
         print("loss keypoints info for compute face angle")
@@ -211,7 +211,7 @@ def get_body_angle(point, mode='openpose'):
         l_shoulder = point[5, :]
         midhip = np.mean(point[11:13, :], axis=0)
     else:
-        raise
+        raise KeyError
     dis = np.sqrt(np.sum((l_shoulder-r_shoulder)**2))
 
     if dis < 0.1:
@@ -239,7 +239,7 @@ def get_shoulder_hip_dis(point, mode='openpose'):
         l_shoulder = point[5, :]
         midhip = np.mean(point[11:13, :], axis=0)
     else:
-        raise
+        raise KeyError
 
     dis = np.sqrt(np.sum((l_shoulder[:3]-r_shoulder[:3])**2))
     dis += np.sqrt(np.sum((l_shoulder[:3]-midhip[:3])**2))

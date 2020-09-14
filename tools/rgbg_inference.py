@@ -1,7 +1,7 @@
 import argparse
 import sys
 sys.path.append(".")
-from gesture_lib.apis import Inference
+from gesture_lib.apis import InferenceRGBD
 
 
 def parse_args():
@@ -28,7 +28,7 @@ def main():
         print("invalid .pth checkpoint file!")
         exit(0)
 
-    camera_infer = Inference(cfg_path=cfg_path, checkpoints=ckp)
+    camera_infer = InferenceRGBD(cfg_path=cfg_path, checkpoints=ckp)
     camera_infer.run(show=args.show)
 
 

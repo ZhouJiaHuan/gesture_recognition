@@ -1,6 +1,10 @@
-# realsense frame size
+# realsense serial number
+camera_id:
+    D435: "750612070109"
+    T265: "929122110445"
 width: 640
 height: 480
+fps: 30
 
 max_person_one_frame: 5
 
@@ -13,7 +17,7 @@ pose_params:
     mode: "trtpose" 
     op_model: "checkpoints/openpose"
     model_pose: 'BODY_25'
-    trt_model: "checkpoints/trtpose/densenet121_trt.pth"
+    trt_model: "checkpoints/trtpose/densenet121_trt.pth" # 224x224
     pose_json_path: "gesture_lib/data/human_pose.json"
 
 
