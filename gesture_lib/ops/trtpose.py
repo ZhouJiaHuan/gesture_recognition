@@ -107,4 +107,3 @@ class TrtPose(object):
 
         idx = np.argmax(zeros_sum)
         return keypoint[idx, :, :]
-

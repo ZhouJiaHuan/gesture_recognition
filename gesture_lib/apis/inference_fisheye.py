@@ -60,10 +60,12 @@ class InferenceFisheye(object):
         try:
             self.fisheye.init_undistort_rectify(self.size)
             while True:
-                # If frames are ready to process
-                if not self.fisheye.is_valid_frame():
-                    continue
                 frame = self.fisheye.next_frame()
+                if frame is None:
+                    print("camera connection interrupted!")
+                    print("avaliable realsense camera: ")
+                    self.fisheye.show_available_device()
+                    break
                 time_s = time.time()
                 color_image = self.fisheye.get_color_img(frame, camera)
                 color_image = cv2.cvtColor(color_image, cv2.COLOR_GRAY2RGB)
@@ -73,9 +75,5 @@ class InferenceFisheye(object):
                     cv_output = self._draw_fps(cv_output, time_e-time_s)
                     cv2.imshow("detect result", cv_output)
                     cv2.waitKey(1)
-        except RuntimeError:
-            print("camera connection interrupted!")
-            print("avaliable realsense camera: ")
-            self.fisheye.show_available_device()
         finally:
             self.fisheye.close_rs_pipe()

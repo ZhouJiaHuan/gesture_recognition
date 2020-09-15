@@ -2,6 +2,7 @@ import pyrealsense2 as rs
 import numpy as np
 import cv2
 import os
+import time
 from math import tan, pi
 from threading import Lock
 from abc import abstractmethod
@@ -55,9 +56,9 @@ class RsRGBD(RsCamera):
         color_frame = aligned_frames.get_color_frame()
         return depth_frame, color_frame
 
-    def next_frame(self):
+    def next_frame(self, timeout_ms=1000):
         try:
-            frame = self.rs_pipe.wait_for_frames(timeout_ms=1000)
+            frame = self.rs_pipe.wait_for_frames(timeout_ms=timeout_ms)
         except RuntimeError:
             frame = None
             return frame
@@ -93,8 +94,8 @@ class RsRGBD(RsCamera):
         try:
             while True:
                 frame = self.next_frame()
-                if not frame:
-                    print("out time for getting next frame")
+                if frame is None:
+                    print("camera connection interrupted!")
                     break
                 color_image = self.get_color_img(frame)
                 depth_image = self.get_depth_img(frame)
@@ -115,7 +116,7 @@ class RsRGBD(RsCamera):
         try:
             while True:
                 frame = self.next_frame()
-                if not frame:
+                if frame is None:
                     break
                 color_image = self.get_color_img(frame)
                 depth_image = self.get_depth_img(frame)
@@ -123,6 +124,8 @@ class RsRGBD(RsCamera):
                 if show is True:
                     cv2.imshow("output", output)
                     cv2.waitKey(1)
+        except RuntimeError:
+            print("camera connection interrupted!")
         finally:
             cv2.destroyAllWindows()
             self.rs_pipe.stop()
@@ -139,6 +142,7 @@ class RsFishEye(RsCamera):
         self.frame_data = {"left": None,
                            "right": None,
                            "timestamp_ms": None}
+        self.current_ts = None
         self.frame_mutex = Lock()
         self.stereo = cv2.StereoSGBM_create(minDisparity=self.min_disp,
                                             numDisparities=self.num_disp,
@@ -227,19 +231,24 @@ class RsFishEye(RsCamera):
         self.undistort_rectify["left"] = (lm1, lm2)
         self.undistort_rectify["right"] = (rm1, rm2)
 
-    def is_valid_frame(self):
-        self.frame_mutex.acquire()
-        valid = self.frame_data["timestamp_ms"] is not None
-        self.frame_mutex.release()
-        return valid
-
-    def next_frame(self):
+    def next_frame(self, timeout_ms=1000):
         assert self.undistort_rectify != {}, \
             "please init the undistort_rectify before start!"
-        self.frame_mutex.acquire()
-        frame_copy = {"left": self.frame_data["left"].copy(),
-                      "right": self.frame_data["right"].copy()}
-        self.frame_mutex.release()
+        t_s = time.time()
+        while True:
+            self.frame_mutex.acquire()
+            valid = self.frame_data["timestamp_ms"] != self.current_ts
+            if (time.time() - t_s) * 1000 >= timeout_ms:
+                return None
+            if not valid:
+                self.frame_mutex.release()
+                continue
+            else:
+                self.current_ts = self.frame_data["timestamp_ms"]
+                frame_copy = {"left": self.frame_data["left"].copy(),
+                              "right": self.frame_data["right"].copy()}
+                self.frame_mutex.release()
+                break
 
         # Undistort and crop the center of the frames
         center_left = cv2.remap(src=frame_copy["left"],
@@ -270,10 +279,10 @@ class RsFishEye(RsCamera):
             self.init_undistort_rectify(height)
             while True:
                 # If frames are ready to process
-                if not self.is_valid_frame():
-                    continue
-
                 frame = self.next_frame()
+                if frame is None:
+                    print("camera connection interrupted!")
+                    break
                 if camera in ("left", "right"):
                     color_image = self.get_color_img(frame, camera)
                 else:
@@ -284,5 +293,7 @@ class RsFishEye(RsCamera):
                 color_image = cv2.cvtColor(color_image, cv2.COLOR_GRAY2RGB)
                 cv2.imshow("color image", color_image)
                 cv2.waitKey(1)
+        except RuntimeError:
+            print("camera connection interrupted!")
         finally:
             self.close_rs_pipe()
