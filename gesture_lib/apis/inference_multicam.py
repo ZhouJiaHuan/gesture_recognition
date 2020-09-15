@@ -62,7 +62,6 @@ class InferenceMulticam(object):
 
         '''
         kp1, out1 = self.extractor.body_keypoints(rgbd_img)
-        fish_img = cv2.cvtColor(fish_img, cv2.COLOR_GRAY2RGB)
         kp2, out2 = self.extractor.body_keypoints(fish_img)
         return kp1, out1, kp2, out2
 

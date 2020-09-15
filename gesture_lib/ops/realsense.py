@@ -264,7 +264,9 @@ class RsFishEye(RsCamera):
         return center_undistorted
 
     def get_color_img(self, frame, camera):
-        return frame[camera][:, self.max_disp:]
+        fish_img = frame[camera][:, self.max_disp:]
+        fish_img = cv2.cvtColor(fish_img, cv2.COLOR_GRAY2RGB)
+        return fish_img
 
     def run(self, height=300, camera="left"):
         assert camera in ("left", "right", "both")
