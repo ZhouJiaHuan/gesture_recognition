@@ -81,7 +81,6 @@ class SurfMatcher(BaseMatcher):
         y2 = keypoint[0, 1] + h / 2
         y1, y2 = max(0, int(y1)), min(height, int(y2))
         img = img_bgr[y1:y2, x1:x2]
-        cv2.rectangle(img_bgr, (x1, y1), (x2, y2), (0, 0, 255))
 
         if img.shape[0] * img.shape[1] > 0:
             src = np.float32(keypoint[:3, ] - [x1, y1])

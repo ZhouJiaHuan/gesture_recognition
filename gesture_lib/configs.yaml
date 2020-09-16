@@ -17,7 +17,10 @@ pose_params:
     mode: "trtpose" 
     op_model: "checkpoints/openpose"
     model_pose: 'BODY_25'
-    trt_model: "checkpoints/trtpose/densenet121_trt.pth" # 224x224
+    # speed first
+    trt_model: "checkpoints/trtpose/resnet18_trt.pth" # 224x224
+    # accuracy first
+    # trt_model: "checkpoints/trtpose/densenet121_trt.pth" # 224x224
     pose_json_path: "gesture_lib/data/human_pose.json"
 
 
@@ -28,8 +31,8 @@ gesture_params:
 
 # params for person id output cache
 output_cache_params:
-    capacity: 20
-    pop_num: 4
+    capacity: 25
+    pop_num: 5
 
 # params for target person
 target_params:
@@ -41,13 +44,14 @@ matcher_params:
     # change to `SurfMatcher` when using Surf feature for matching
     # `DlibMatcher` is recommended for better matching accuracy
     type: DlibMatcher 
-    alpha: 0.5
+    # regular term with DIOU, should greater than 0.8
+    alpha: 0.9
 
 # params for memory management
 memory_params:
     capacity: 5
-    max_id: 100
+    max_id: 10
     clean_times: 20
     pop_num: 4
-    sim_thr1: 0.2
-    sim_thr2: 0.8
+    sim_thr1: 0.5
+    sim_thr2: 0.9

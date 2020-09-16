@@ -30,8 +30,6 @@ class TrtPose(object):
         topology = trt_pose.coco.coco_category_to_topology(human_pose)
         self.parse_objects = ParseObjects(topology)
         self.draw_objects = DrawObjects(topology)
-        self.width = 224
-        self.height = 224
 
     def _preprocess(self, img, resize):
         mean = torch.Tensor([0.485, 0.456, 0.406]).cuda()
