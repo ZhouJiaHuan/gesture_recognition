@@ -68,7 +68,6 @@ class InferenceFisheye(object):
                     break
                 time_s = time.time()
                 color_image = self.fisheye.get_color_img(frame, camera)
-                color_image = cv2.cvtColor(color_image, cv2.COLOR_GRAY2RGB)
                 keypoints, cv_output = self._body_keypoints(color_image)
                 time_e = time.time()
                 if show:
