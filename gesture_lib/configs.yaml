@@ -54,4 +54,4 @@ memory_params:
     clean_times: 20
     pop_num: 4
     sim_thr1: 0.5
-    sim_thr2: 0.9
+    sim_thr2: 0.8

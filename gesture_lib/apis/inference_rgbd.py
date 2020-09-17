@@ -304,8 +304,8 @@ class InferenceRGBD(object):
         for skeleton in skeletons:
             input_info = self.memory_manager.prepare_input(color_image, skeleton)
             best_person_id, best_sim = self.memory_manager.find_best_match(input_info)
-
-            if best_sim > self.sim_thr1:
+            valid_person = best_person_id in memory_person_ids
+            if best_sim > self.sim_thr1 and valid_person:
                 self.memory_manager.update_person_memory(best_person_id, input_info)
                 if self._update_output_cache(best_person_id):
                     self.person_ids.append([best_person_id, best_sim])

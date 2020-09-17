@@ -291,8 +291,6 @@ class RsFishEye(RsCamera):
                     l_image = self.get_color_img(frame, "left")
                     r_image = self.get_color_img(frame, "right")
                     color_image = np.hstack((l_image, r_image))
-                # print(color_image.shape)
-                color_image = cv2.cvtColor(color_image, cv2.COLOR_GRAY2RGB)
                 cv2.imshow("color image", color_image)
                 cv2.waitKey(1)
         except RuntimeError:
