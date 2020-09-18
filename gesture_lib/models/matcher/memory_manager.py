@@ -27,7 +27,7 @@ class MemoryManager(object):
         
         - point_center: 3-D location (x, y, z)
         
-        - keypoint_feature: feature extracted from color image with
+        - feature: feature extracted from color image with
             keypoint info. The type is decided by `extract_feature`
     '''
     def __init__(self, matcher, capacity=5, max_id=100, clean_times=20,
@@ -56,13 +56,13 @@ class MemoryManager(object):
     def prepare_input(self, color_image, skeleton):
         input_info = {}
         keypoint, point = skeleton
-        keypoint_feature = self._extract_feature(color_image, keypoint)
+        feature = self._extract_feature(color_image, skeleton)
         point_center = get_location(point)
         input_info['keypoint'] = keypoint
         input_info['point'] = point
         input_info['keypoint_box'] = get_keypoint_box(keypoint)
         input_info['point_center'] = point_center
-        input_info['keypoint_feature'] = keypoint_feature
+        input_info['feature'] = feature
         input_info['visible'] = True
         return input_info
 
@@ -75,7 +75,7 @@ class MemoryManager(object):
         - point: point array, for trtpose, shape 18x2
         - keypoint_box: minimum bounding rectangle, (x1, y1, x2, y2)
         - point_center: 3-D location (x, y, z)
-        - keypoint_feature: feature vector extracted from color image with
+        - feature: feature vector extracted from color image with
             keypoint info. The type is decided by `_extract_feature`
         '''
         return self.matcher.match(memory_info, input_info)

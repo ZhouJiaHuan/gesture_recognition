@@ -6,18 +6,24 @@ from gesture_lib.registry import MATCHERS
 @MATCHERS.register_module(name="BaseMatcher")
 class BaseMatcher(object):
 
-    def __init__(self, alpha=0.5):
+    def __init__(self, mode="trtpose", alpha=0.5):
         super(BaseMatcher, self).__init__()
+        assert mode in ('trtpose', 'openpose')
+        self.mode = mode
         self.alpha = alpha
 
     @abstractmethod
-    def extract_feature(self, img_bgr, keypoint):
+    def extract_feature(self, img_bgr, skeleton):
         '''extract feature from BGR image with specified keypoint.
 
         Args:
             img_bgr: [3-d array], source BGR image/frame
-            keypoint: [2-d array], keypoint info, shape (25, 3) for
-                openpose body-25 and shape (18, 2) for trtpose body-18
+            skeleton: [keypoint, point]
+                - keypoint info, shape (25, 3) for openpose body-25
+                and shape (18, 2) for trtpose body-18
+                - point info, shape (25, 4) for openpose body-25
+                and shape (18, 3) for trtpose body-18
+
         
         Return:
             feature: feature extracted for `feature_similarity`
@@ -46,7 +52,7 @@ class BaseMatcher(object):
         
         - point_center: 3-D location (x, y, z)
         
-        - keypoint_feature: feature extracted from color image with
+        - feature: feature extracted from color image with
             keypoint info. The type is decided by `extract_feature`
 
         - visible: if the person is found in current frame
@@ -62,8 +68,8 @@ class BaseMatcher(object):
         
         diou = box_iou(box1, box2, mode='diou')
 
-        feature1 = person1['keypoint_feature']
-        feature2 = person2['keypoint_feature']
+        feature1 = person1['feature']
+        feature2 = person2['feature']
         feature_sim = self.feature_similarity(feature1, feature2)
         sim = self.alpha * feature_sim + (1-self.alpha) * diou
 

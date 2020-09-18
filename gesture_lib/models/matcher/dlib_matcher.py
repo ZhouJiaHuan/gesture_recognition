@@ -10,23 +10,22 @@ from gesture_lib.registry import MATCHERS
 class DlibMatcher(BaseMatcher):
     '''Matcher with Dlib face apis
     '''
-    def __init__(self, mode="trtpose", **kwargs):
+    def __init__(self, **kwargs):
         super(DlibMatcher, self).__init__(**kwargs)
-        self.mode = mode
         pre_path = "gesture_lib/data/shape_predictor_68_face_landmarks.dat"
         rec_path = "gesture_lib/data/dlib_face_recognition_resnet_model_v1.dat"
         self.face_pre = dlib.shape_predictor(pre_path)
         self.face_rec = dlib.face_recognition_model_v1(rec_path)
 
-    def extract_feature(self, img_bgr, keypoint):
+    def extract_feature(self, img_bgr, skeleton):
         feature = np.zeros([0, 128])
 
         # get face keypoints
         # Nose, REye, LEye, REar, LEar
         if self.mode == "openpose":
-            keypoint = keypoint[[0, 15, 16, 17, 18], :2]
+            keypoint = skeleton[0][[0, 15, 16, 17, 18], :2]
         elif self.mode == "trtpose":
-            keypoint = keypoint[[0, 2, 1, 4, 3], :]
+            keypoint = skeleton[0][[0, 2, 1, 4, 3], :]
         else:
             raise
 

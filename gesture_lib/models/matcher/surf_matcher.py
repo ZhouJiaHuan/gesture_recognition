@@ -6,11 +6,12 @@ from gesture_lib.registry import MATCHERS
 
 @MATCHERS.register_module(name="SurfMatcher")
 class SurfMatcher(BaseMatcher):
+    '''matcher with the Surf feature extracted from face and body
+    '''
 
-    def __init__(self, mode="trtpose", belta=0.5, **kwargs):
+    def __init__(self, belta=0.5, **kwargs):
         super(SurfMatcher, self).__init__(**kwargs)
         self.belta = belta
-        self.mode = mode
         self.face_feature = cv2.xfeatures2d.SURF_create(200, extended=False, upright=0)
         self.body_feature = cv2.xfeatures2d.SURF_create(100, extended=False, upright=0)
         index_param = dict(algorithm=0, trees=5)
@@ -108,9 +109,9 @@ class SurfMatcher(BaseMatcher):
         sim = num / len(matches)
         return sim
 
-    def extract_feature(self, img_bgr, keypoint):
-        face_feature = self._get_face_feature(img_bgr, keypoint)
-        body_feature = self._get_body_feature(img_bgr, keypoint)
+    def extract_feature(self, img_bgr, skeleton):
+        face_feature = self._get_face_feature(img_bgr, skeleton[0])
+        body_feature = self._get_body_feature(img_bgr, skeleton[0])
         return [face_feature, body_feature]
 
     def feature_similarity(self, feature1, feature2):

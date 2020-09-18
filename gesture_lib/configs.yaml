@@ -37,13 +37,15 @@ output_cache_params:
 # params for target person
 target_params:
     max_miss_times: 20
-    vote_len: 10
+    vote_len: 15
 
 # params for matching in tracking process
 matcher_params:
-    # change to `SurfMatcher` when using Surf feature for matching
-    # `DlibMatcher` is recommended for better matching accuracy
-    type: DlibMatcher 
+    # available matcher:
+    # - SurfMatcher
+    # - DlibMatcher: accuracy first
+    # - SkeletonMatcher: speed first
+    type: SkeletonMatcher 
     # regular term with DIOU, should greater than 0.8
     alpha: 0.9
 
@@ -53,5 +55,6 @@ memory_params:
     max_id: 10
     clean_times: 20
     pop_num: 4
+    # may need to be adjusted according to the matcher
     sim_thr1: 0.5
     sim_thr2: 0.8
