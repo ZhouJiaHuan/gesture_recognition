@@ -97,6 +97,7 @@ class MemoryManager(object):
             self.memory[person_id]['point'] = input_info['point']
             self.memory[person_id]['keypoint_box'] = input_info['keypoint_box']
             self.memory[person_id]['point_center'] = input_info['point_center']
+            # self.memory[person_id]['feature'] = input_info['feature']
             self.memory[person_id]['visible'] = input_info['visible']
         else:
             return

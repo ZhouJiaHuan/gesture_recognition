@@ -123,13 +123,16 @@ class Body3DExtractor(object):
         point_num = keypoint.shape[0]
         point = np.zeros([point_num, 4])
         point[:, -1] = keypoint[:, -1]
+        width = depth_frame.get_width()
+        height = depth_frame.get_height()
         for i in range(point_num):
-            temp_keypoint = keypoint[i, ]
-            if temp_keypoint[-1] < 1e-3:
+            if keypoint[i, -1] < 1e-3:
                 continue  # ignore invalid keypoint
-            else:
-                temp_point = self.pixel_to_point(depth_frame, temp_keypoint[:2])
-            point[i, :3] = temp_point
+            if keypoint[i, 0] < 1e-3 or keypoint[i, 1] < 1e-3:
+                continue
+            if keypoint[i, 0] >= width or keypoint[i, 1] >= height:
+                continue
+            point[i, :3] = self.pixel_to_point(depth_frame, keypoint[i, :2])
 
         return point
 
@@ -144,8 +147,12 @@ class Body3DExtractor(object):
         '''
         point_num = keypoint.shape[0]
         point = np.zeros([point_num, 3])
+        width = depth_frame.get_width()
+        height = depth_frame.get_height()
         for i in range(point_num):
             if keypoint[i, 0] < 1e-3 or keypoint[i, 1] < 1e-3:
+                continue
+            if keypoint[i, 0] >= width or keypoint[i, 1] >= height:
                 continue
             point[i, :3] = self.pixel_to_point(depth_frame, keypoint[i, ])
 

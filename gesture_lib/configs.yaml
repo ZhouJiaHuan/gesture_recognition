@@ -18,9 +18,9 @@ pose_params:
     op_model: "checkpoints/openpose"
     model_pose: 'BODY_25'
     # speed first
-    trt_model: "checkpoints/trtpose/resnet18_trt.pth" # 224x224
+    # trt_model: "checkpoints/trtpose/resnet18_trt.pth" # 224x224
     # accuracy first
-    # trt_model: "checkpoints/trtpose/densenet121_trt.pth" # 224x224
+    trt_model: "checkpoints/trtpose/densenet121_trt.pth" # 224x224
     pose_json_path: "gesture_lib/data/human_pose.json"
 
 
@@ -45,7 +45,7 @@ matcher_params:
     # - SurfMatcher
     # - DlibMatcher: accuracy first
     # - SkeletonMatcher: speed first
-    type: SkeletonMatcher 
+    type: DlibMatcher 
     # regular term with DIOU, should greater than 0.8
     alpha: 0.9
 
@@ -56,5 +56,9 @@ memory_params:
     clean_times: 20
     pop_num: 4
     # may need to be adjusted according to the matcher
-    sim_thr1: 0.5
-    sim_thr2: 0.8
+    # for DlibMatcher
+    sim_thr1: 0.4
+    sim_thr2: 0.82
+    # for SkeletonMatcher
+    # sim_thr1: 0.5
+    # sim_thr2: 0.98

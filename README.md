@@ -56,3 +56,10 @@ python tools/camera_inference.py CONFIG CHECKPOINT --show
 ```
 
 For specified example, see `inference_trt.sh`  for inference with the `trt-pose`. If you want to using `openpose` or modify other configures, please refer to `apis/inference.yaml` 
+
+# TODO list
+
+- speed up with Cython or Pybind11 (see gesture_lib/ops/clib and gesture_lib/ops/pybind11_lib/ for part of this work)
+- local search algorithm optimization for skeletons mapping from fisheye camera to RGB-D camera
+- one more stable matching algorithm for tracking (we use the face recognition and SURF feature for now)
+- gesture data collection for more robust gesture recognition (need much more data)

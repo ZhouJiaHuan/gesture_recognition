@@ -1,11 +1,13 @@
 import argparse
 import sys
-sys.path.append('.')
-from gesture_lib.apis import InferenceMulticam
+sys.path.append(".")
+from gesture_lib.apis import InferenceBag
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="camera inference")
+    parser.add_argument('bag_path',
+                        help="bag file path")
     parser.add_argument('config',
                         help="yaml config file path")
     parser.add_argument('checkpoint',
@@ -27,10 +29,10 @@ def main():
     if ckp.split('.')[-1] != 'pth':
         print("invalid .pth checkpoint file!")
         exit(0)
-    camera_infer = InferenceMulticam(cfg_path=cfg_path, checkpoints=ckp)
-    camera_infer.run(show=args.show)
+
+    camera_infer = InferenceBag(cfg_path=cfg_path, checkpoints=ckp)
+    camera_infer.run(args.bag_path, show=args.show)
 
 
 if __name__ == "__main__":
     main()
-
